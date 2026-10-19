@@ -107,7 +107,7 @@
             </div>
         </div>
 
-        <!-- Mode Filter Karyawan (Khusus Admin) -->
+        <!-- Mode Filter Karyawan (Khusus Admin) & Pilihan Periode Gajian -->
         <div id="adminFilterPanel" class="card shadow-sm border-primary mb-2" style="display: none;">
             <div class="card-body py-2">
                 <div class="row g-2 align-items-center">
@@ -116,8 +116,8 @@
                         <select id="selectKaryawanAdmin" class="form-select form-select-sm fw-bold" onchange="gantiKaryawanAdmin()"></select>
                     </div>
                     <div class="col-md-7 col-6 text-end">
-                        <span class="small text-muted d-block">Siklus Gajian Cut-Off:</span>
-                        <span id="labelSiklusGaji" class="fw-bold text-dark small">-</span>
+                        <span class="small text-muted d-block">Pilihan Periode Gajian:</span>
+                        <div id="labelSiklusGaji"></div>
                     </div>
                 </div>
             </div>
@@ -320,7 +320,7 @@
                     </div>
                     <div class="mb-2">
                         <label class="form-label small fw-bold text-primary mb-1">Tanggal Cut-off Gajian (Siklus)</label>
-                        <input type="number" id="setTanggalSiklus" class="form-control form-control-sm" placeholder="Contoh: 9" min="1" max="31">
+                        <input type="number" id="setTanggalSiklus" class="form-control form-control-sm" placeholder="Contoh: 19" min="1" max="31">
                     </div>
                 </div>
                 <div class="modal-footer py-2">
@@ -395,6 +395,7 @@
         let currentUser = null;
         let currentRole = null;
         let selectedKaryawan = null; 
+        let selectedPeriodeOffset = 0; // 0 = Periode Berjalan, -1 = 1 Bulan Lalu, -2 = 2 Bulan Lalu
         
         let localUsers = {};
         let localGaji = {};
@@ -455,6 +456,7 @@
             if (u && u.pin === inputPin) {
                 currentUser = u.nama;
                 currentRole = u.role;
+                selectedPeriodeOffset = 0;
                 
                 const nonAdminKey = Object.keys(localUsers).find(k => localUsers[k].role !== 'admin');
                 selectedKaryawan = (currentRole === 'admin') ? (nonAdminKey ? localUsers[nonAdminKey].nama : 'Aris') : currentUser;
@@ -512,6 +514,7 @@
 
         function gantiKaryawanAdmin() {
             selectedKaryawan = document.getElementById('selectKaryawanAdmin').value;
+            selectedPeriodeOffset = 0;
             updateUI();
         }
 
@@ -522,31 +525,53 @@
                 nominal: 50000,
                 lembur: 50000,
                 potongan: 50000,
-                siklusTanggal: 1 // Default tanggal 1 jika belum diisi
+                siklusTanggal: 19 // Default sesuai tgl masuk
             };
         }
 
-        // 5. UPDATE UI & PERHITUNGAN DINAMIS PER TANGGAL MASUK
+        function getRentangPeriode(cutoffDay, offsetMonths = 0) {
+            const now = new Date();
+            let baseYear = now.getFullYear();
+            let baseMonth = now.getMonth() + offsetMonths;
+
+            let startPeriod, endPeriod;
+            if (now.getDate() >= cutoffDay) {
+                startPeriod = new Date(baseYear, baseMonth, cutoffDay, 0, 0, 0);
+                endPeriod = new Date(baseYear, baseMonth + 1, cutoffDay - 1, 23, 59, 59);
+            } else {
+                startPeriod = new Date(baseYear, baseMonth - 1, cutoffDay, 0, 0, 0);
+                endPeriod = new Date(baseYear, baseMonth, cutoffDay - 1, 23, 59, 59);
+            }
+            return { startPeriod, endPeriod };
+        }
+
+        function gantiPeriodeOffset(val) {
+            selectedPeriodeOffset = parseInt(val);
+            updateUI();
+        }
+
+        // 5. UPDATE UI DENGAN DUKUNGAN PERIODE LALU
         function updateUI() {
             if (!currentUser) return;
             const targetNama = (currentRole === 'admin') ? selectedKaryawan : currentUser;
             document.querySelectorAll('.id-nama-karyawan').forEach(el => el.innerText = targetNama || '-');
 
             const cfg = getSettingGaji(targetNama);
-            const cutoffDay = parseInt(cfg.siklusTanggal) || 1;
-            document.getElementById('labelSiklusGaji').innerText = `Tgl ${cutoffDay} tiap Bulan`;
+            const cutoffDay = parseInt(cfg.siklusTanggal) || 19;
 
-            // Hitung Rentang Tanggal Siklus Gajian Individu
-            const now = new Date();
-            let startPeriod, endPeriod;
+            const { startPeriod, endPeriod } = getRentangPeriode(cutoffDay, selectedPeriodeOffset);
 
-            if (now.getDate() >= cutoffDay) {
-                startPeriod = new Date(now.getFullYear(), now.getMonth(), cutoffDay);
-                endPeriod = new Date(now.getFullYear(), now.getMonth() + 1, cutoffDay - 1, 23, 59, 59);
-            } else {
-                startPeriod = new Date(now.getFullYear(), now.getMonth() - 1, cutoffDay);
-                endPeriod = new Date(now.getFullYear(), now.getMonth(), cutoffDay - 1, 23, 59, 59);
-            }
+            const fmtStart = startPeriod.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
+            const fmtEnd = endPeriod.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+            
+            // Pasang Dropdown Pilihan Periode di Header Filter
+            document.getElementById('labelSiklusGaji').innerHTML = `
+                <select onchange="gantiPeriodeOffset(this.value)" class="form-select form-select-sm fw-bold border-primary" style="font-size:0.78rem;">
+                    <option value="0" ${selectedPeriodeOffset === 0 ? 'selected' : ''}>Bulan Ini (${fmtStart} - ${fmtEnd})</option>
+                    <option value="-1" ${selectedPeriodeOffset === -1 ? 'selected' : ''}>Bulan Lalu (Siklus Sebelumnya)</option>
+                    <option value="-2" ${selectedPeriodeOffset === -2 ? 'selected' : ''}>2 Bulan Lalu</option>
+                </select>
+            `;
 
             const rawAbsenData = localAbsen[targetNama] || {};
             const rawKasbonData = localKasbon[targetNama] || {};
@@ -555,12 +580,8 @@
             Object.keys(rawAbsenData).forEach(k => {
                 let item = rawAbsenData[k];
                 item._key = k;
-                let itemDate = new Date(item.rawDate);
-                
-                // Jika Admin, tampilkan SEMUA data agar bisa dipantau tanpa tersembunyi
-                if (currentRole === 'admin') {
-                    listAbsenPeriod.push(item);
-                } else if (itemDate >= startPeriod && itemDate <= endPeriod) {
+                let itemDate = new Date(item.rawDate + 'T00:00:00');
+                if (itemDate >= startPeriod && itemDate <= endPeriod) {
                     listAbsenPeriod.push(item);
                 }
             });
@@ -569,16 +590,13 @@
             Object.keys(rawKasbonData).forEach(k => {
                 let item = rawKasbonData[k];
                 item._key = k;
-                let itemDate = new Date(item.rawDate || item.tanggal);
-                
-                if (currentRole === 'admin') {
-                    listKasbonPeriod.push(item);
-                } else if (itemDate >= startPeriod && itemDate <= endPeriod) {
+                let itemDate = new Date((item.rawDate || item.tanggal) + 'T00:00:00');
+                if (itemDate >= startPeriod && itemDate <= endPeriod) {
                     listKasbonPeriod.push(item);
                 }
             });
 
-            // Perhitungan Angka Stat
+            // Perhitungan Stat Periode Terpilih
             let totalHadir = listAbsenPeriod.filter(x => x.status === 'Hadir' || x.status === 'Lembur').length;
             let totalAbsen = listAbsenPeriod.filter(x => x.status === 'Tidak Masuk').length;
             let totalLemburCount = listAbsenPeriod.filter(x => x.lembur === true).length;
@@ -652,7 +670,7 @@
             const tabelRiwayat = document.getElementById('tabelRiwayat');
             tabelRiwayat.innerHTML = '';
             if (listAbsenPeriod.length === 0) {
-                tabelRiwayat.innerHTML = `<tr><td colspan="7" class="text-center text-muted py-2">Belum ada riwayat absensi.</td></tr>`;
+                tabelRiwayat.innerHTML = `<tr><td colspan="7" class="text-center text-muted py-2">Belum ada riwayat pada periode terpilih.</td></tr>`;
             } else {
                 listAbsenPeriod.sort((a, b) => new Date(b.rawDate) - new Date(a.rawDate));
                 listAbsenPeriod.forEach(item => {
@@ -701,7 +719,7 @@
             const tabelKasbon = document.getElementById('tabelKasbon');
             tabelKasbon.innerHTML = '';
             if (listKasbonPeriod.length === 0) {
-                tabelKasbon.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-2">Belum ada riwayat kasbon.</td></tr>`;
+                tabelKasbon.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-2">Belum ada riwayat kasbon periode ini.</td></tr>`;
             } else {
                 listKasbonPeriod.forEach((item, idx) => {
                     tabelKasbon.innerHTML += `
@@ -872,7 +890,7 @@
             }
         }
 
-        // 8. MODAL ACTIONS (SETTING GAJI INDIVIDUAL & USER)
+        // 8. MODAL ACTIONS
         let bsModalGaji, bsModalAkun;
 
         function bukaModalGaji() {
@@ -883,7 +901,7 @@
             document.getElementById('setNominalGaji').value = cfg.nominal || 50000;
             document.getElementById('setTarifLembur').value = cfg.lembur || 50000;
             document.getElementById('setPotonganAbsen').value = cfg.potongan || 50000;
-            document.getElementById('setTanggalSiklus').value = cfg.siklusTanggal || 1;
+            document.getElementById('setTanggalSiklus').value = cfg.siklusTanggal || 19;
 
             toggleFormGaji();
             bsModalGaji = new bootstrap.Modal(document.getElementById('modalGaji'));
@@ -902,7 +920,7 @@
                 nominal: parseInt(document.getElementById('setNominalGaji').value) || 0,
                 lembur: parseInt(document.getElementById('setTarifLembur').value) || 0,
                 potongan: parseInt(document.getElementById('setPotonganAbsen').value) || 0,
-                siklusTanggal: parseInt(document.getElementById('setTanggalSiklus').value) || 1
+                siklusTanggal: parseInt(document.getElementById('setTanggalSiklus').value) || 19
             };
 
             refGaji.child(selectedKaryawan).set(dataConfig);
@@ -968,22 +986,13 @@
             }
         }
 
-        // 9. CETAK SLIP GAJI PDF SIKLUS INDIVIDUAL
+        // 9. CETAK SLIP GAJI PDF PERIODE TERPILIH
         function cetakPDF() {
             const targetNama = (currentRole === 'admin') ? selectedKaryawan : currentUser;
             const cfg = getSettingGaji(targetNama);
+            const cutoffDay = parseInt(cfg.siklusTanggal) || 19;
 
-            const now = new Date();
-            let startPeriod, endPeriod;
-            const cutoffDay = parseInt(cfg.siklusTanggal) || 1;
-
-            if (now.getDate() >= cutoffDay) {
-                startPeriod = new Date(now.getFullYear(), now.getMonth(), cutoffDay);
-                endPeriod = new Date(now.getFullYear(), now.getMonth() + 1, cutoffDay - 1, 23, 59, 59);
-            } else {
-                startPeriod = new Date(now.getFullYear(), now.getMonth() - 1, cutoffDay);
-                endPeriod = new Date(now.getFullYear(), now.getMonth(), cutoffDay - 1, 23, 59, 59);
-            }
+            const { startPeriod, endPeriod } = getRentangPeriode(cutoffDay, selectedPeriodeOffset);
 
             const rawAbsenData = localAbsen[targetNama] || {};
             const rawKasbonData = localKasbon[targetNama] || {};
@@ -991,14 +1000,14 @@
             let listAbsen = [];
             Object.keys(rawAbsenData).forEach(k => {
                 let item = rawAbsenData[k];
-                let d = new Date(item.rawDate);
+                let d = new Date(item.rawDate + 'T00:00:00');
                 if (d >= startPeriod && d <= endPeriod) listAbsen.push(item);
             });
 
             let listKasbon = [];
             Object.keys(rawKasbonData).forEach(k => {
                 let item = rawKasbonData[k];
-                let d = new Date(item.rawDate || item.tanggal);
+                let d = new Date((item.rawDate || item.tanggal) + 'T00:00:00');
                 if (d >= startPeriod && d <= endPeriod) listKasbon.push(item);
             });
 
