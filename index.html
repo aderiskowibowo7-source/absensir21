@@ -82,7 +82,7 @@
                         <span id="printPotonganJamVal">Rp 0</span>
                     </div>
                     <div class="d-flex justify-content-between mb-1">
-                        <span id="printKasbonRow">• Kasbon</span>
+                        <span id="printKasbonRow">• Total Kasbon</span>
                         <span id="printKasbonVal">Rp 0</span>
                     </div>
                 </div>
@@ -609,7 +609,7 @@
             updateUI();
         }
 
-        // 5. UPDATE UI (BEBAS FILTER PERIODE BULAN LALU & AKURAT)
+        // 5. UPDATE UI (KUNCI NOMINAL GAJI TERSIMPAN DI RIWAYAT & FILTER KASBON FIX)
         function updateUI() {
             if (!currentUser) return;
             const targetNama = (currentRole === 'admin') ? selectedKaryawan : currentUser;
@@ -634,14 +634,17 @@
             const rawAbsenData = localAbsen[targetNama] || {};
             const rawKasbonData = localKasbon[targetNama] || {};
 
+            // Format tanggal string murni YYYY-MM-DD
+            const strStart = startPeriod.toISOString().slice(0, 10);
+            const strEnd = endPeriod.toISOString().slice(0, 10);
+
             // Processing Absensi
             let listAbsenPeriod = [];
             Object.keys(rawAbsenData).forEach(k => {
                 let item = rawAbsenData[k];
                 item._key = k;
                 let strTgl = (item.rawDate || '').slice(0, 10);
-                let itemDate = new Date(strTgl + 'T00:00:00');
-                if (!isNaN(itemDate.getTime()) && itemDate >= startPeriod && itemDate <= endPeriod) {
+                if (strTgl >= strStart && strTgl <= strEnd) {
                     listAbsenPeriod.push(item);
                 }
             });
@@ -652,36 +655,47 @@
                 let item = rawKasbonData[k];
                 item._key = k;
                 let strTgl = (item.rawDate || item.tanggal || '').slice(0, 10);
-                let itemDate = new Date(strTgl + 'T00:00:00');
                 
                 if (currentRole === 'admin') {
                     listKasbonPeriod.push(item);
-                } else if (!isNaN(itemDate.getTime()) && itemDate >= startPeriod && itemDate <= endPeriod) {
+                } else if (strTgl >= strStart && strTgl <= strEnd) {
                     listKasbonPeriod.push(item);
                 }
             });
 
-            // Perhitungan Stat
+            // Perhitungan Stat (Gaji Pokok Karyawan menggunakan penguncian nilai riwayat)
             let totalHadir = listAbsenPeriod.filter(x => x.status === 'Hadir' || x.status === 'Lembur').length;
             let totalAbsen = listAbsenPeriod.filter(x => x.status === 'Tidak Masuk').length;
             let totalLemburCount = listAbsenPeriod.filter(x => x.lembur === true).length;
 
             let totalPotonganKurangJam = 0;
-            const tarifPerJam = (cfg.tipe === 'Harian' ? cfg.nominal : cfg.potongan) / 8;
+            let totalGajiAbsen = 0;
 
             listAbsenPeriod.forEach(item => {
+                // Memakai tarif harian terkunci di riwayat item, jika tidak ada baru panggil cfg
+                let rateNominal = (item.savedNominal !== undefined) ? item.savedNominal : cfg.nominal;
+                let ratePotongan = (item.savedPotongan !== undefined) ? item.savedPotongan : cfg.potongan;
+                let ratePerJam = (cfg.tipe === 'Harian' ? rateNominal : ratePotongan) / 8;
+
+                if (cfg.tipe === 'Harian' && item.status !== 'Tidak Masuk') {
+                    totalGajiAbsen += rateNominal;
+                }
+
                 if (item.jamMasuk && item.jamPulang && item.status !== 'Tidak Masuk') {
                     let [h1, m1] = item.jamMasuk.split(':').map(Number);
                     let [h2, m2] = item.jamPulang.split(':').map(Number);
                     let durasiJam = (h2 + m2/60) - (h1 + m1/60);
                     if (durasiJam > 0 && durasiJam < 8) {
                         let kurangJam = 8 - durasiJam;
-                        totalPotonganKurangJam += (kurangJam * tarifPerJam);
+                        totalPotonganKurangJam += (kurangJam * ratePerJam);
                     }
                 }
             });
 
-            let totalGajiAbsen = (cfg.tipe === 'Bulanan') ? cfg.nominal : (totalHadir * cfg.nominal);
+            if (cfg.tipe === 'Bulanan') {
+                totalGajiAbsen = cfg.nominal;
+            }
+
             let totalGajiLembur = totalLemburCount * cfg.lembur;
             let totalKotor = totalGajiAbsen + totalGajiLembur;
 
@@ -741,6 +755,9 @@
                 listAbsenPeriod.forEach(item => {
                     let durasiStr = '-';
                     let potonganJamRp = 0;
+                    let rateNominal = (item.savedNominal !== undefined) ? item.savedNominal : cfg.nominal;
+                    let ratePotongan = (item.savedPotongan !== undefined) ? item.savedPotongan : cfg.potongan;
+                    let ratePerJam = (cfg.tipe === 'Harian' ? rateNominal : ratePotongan) / 8;
 
                     if (item.jamMasuk && item.jamPulang && item.status !== 'Tidak Masuk') {
                         let [h1, m1] = item.jamMasuk.split(':').map(Number);
@@ -751,7 +768,7 @@
                             let mins = Math.round((durasiJam - hrs) * 60);
                             durasiStr = `${hrs}j ${mins}m`;
                             if (durasiJam < 8) {
-                                potonganJamRp = (8 - durasiJam) * tarifPerJam;
+                                potonganJamRp = (8 - durasiJam) * ratePerJam;
                             }
                         }
                     }
@@ -762,7 +779,7 @@
 
                     if (item.lembur) statusBadge += ` <span class="badge" style="background:#6f42c1;">Lembur</span>`;
 
-                    let pendapatanHari = (cfg.tipe === 'Harian' && item.status !== 'Tidak Masuk') ? (cfg.nominal - potonganJamRp + (item.lembur ? cfg.lembur : 0)) : (item.lembur ? cfg.lembur : 0);
+                    let pendapatanHari = (cfg.tipe === 'Harian' && item.status !== 'Tidak Masuk') ? (rateNominal - potonganJamRp + (item.lembur ? cfg.lembur : 0)) : (item.lembur ? cfg.lembur : 0);
 
                     let aksiAdminTd = (currentRole === 'admin') 
                         ? `<td class="text-center"><button onclick="hapusAbsenItem('${item._key}')" class="btn btn-xs btn-outline-danger"><i class="fa-solid fa-trash"></i></button></td>` : '';
@@ -803,9 +820,10 @@
             }
         }
 
-        // 6. ACTION ABSENSI
+        // 6. ACTION ABSENSI (KUNCI RATE GAJI SAAT INI KE FIREBASE)
         function lakukanAbsenMasuk() {
             const targetNama = (currentRole === 'admin') ? selectedKaryawan : currentUser;
+            const cfg = getSettingGaji(targetNama);
             const jamManual = document.getElementById('inputJamManual').value;
             const catatan = document.getElementById('inputCatatanAbsen').value.trim();
 
@@ -819,7 +837,9 @@
                 jamPulang: '',
                 status: 'Hadir',
                 lembur: false,
-                catatan: catatan
+                catatan: catatan,
+                savedNominal: cfg.nominal || 50000,
+                savedPotongan: cfg.potongan || 50000
             };
 
             refAbsen.child(targetNama).push(newAbsen);
@@ -859,6 +879,7 @@
 
         function lakukanTidakMasuk() {
             const targetNama = (currentRole === 'admin') ? selectedKaryawan : currentUser;
+            const cfg = getSettingGaji(targetNama);
             const catatan = document.getElementById('inputCatatanAbsen').value.trim() || 'Izin/Tidak Masuk';
             const sekarang = new Date();
             const rawDate = sekarang.toISOString().slice(0, 10);
@@ -869,7 +890,9 @@
                 jamPulang: '',
                 status: 'Tidak Masuk',
                 lembur: false,
-                catatan: catatan
+                catatan: catatan,
+                savedNominal: cfg.nominal || 50000,
+                savedPotongan: cfg.potongan || 50000
             };
 
             refAbsen.child(targetNama).push(newAbsen);
@@ -891,6 +914,7 @@
                 }
             }
 
+            const cfg = getSettingGaji(targetNama);
             const tgl = document.getElementById('susulanTanggal').value;
             const jamM = document.getElementById('susulanJamMasuk').value;
             const jamP = document.getElementById('susulanJamPulang').value;
@@ -904,7 +928,9 @@
                 jamPulang: (st !== 'Tidak Masuk') ? (jamP || '16:00') : '',
                 status: (st === 'Tidak Masuk') ? 'Tidak Masuk' : 'Hadir',
                 lembur: (st === 'Lembur'),
-                catatan: ''
+                catatan: '',
+                savedNominal: cfg.nominal || 50000,
+                savedPotongan: cfg.potongan || 50000
             };
 
             refAbsen.child(targetNama).push(newAbsen)
@@ -925,7 +951,7 @@
             }
         }
 
-        // 7. ACTION KASBON (DENGAN TANGGAL PILIHAN)
+        // 7. ACTION KASBON (STRING PARSING PASTI PRESISI SIKLUS)
         function tambahKasbon() {
             const targetNama = (currentRole === 'admin') ? selectedKaryawan : currentUser;
             const tglManual = document.getElementById('inputTanggalKasbon').value;
@@ -1063,7 +1089,7 @@
             }
         }
 
-        // 9. CETAK SLIP GAJI PDF PERIODE TERPILIH (R21 POOL & CAFE COMPACT - FIXED KASBON)
+        // 9. CETAK SLIP GAJI PDF PERIODE TERPILIH (R21 POOL & CAFE COMPACT - SINKRON PASTI KASBON)
         function cetakPDF() {
             const targetNama = (currentRole === 'admin') ? selectedKaryawan : currentUser;
             const cfg = getSettingGaji(targetNama);
@@ -1074,20 +1100,21 @@
             const rawAbsenData = localAbsen[targetNama] || {};
             const rawKasbonData = localKasbon[targetNama] || {};
 
+            const strStart = startPeriod.toISOString().slice(0, 10);
+            const strEnd = endPeriod.toISOString().slice(0, 10);
+
             let listAbsen = [];
             Object.keys(rawAbsenData).forEach(k => {
                 let item = rawAbsenData[k];
                 let strTgl = (item.rawDate || '').slice(0, 10);
-                let d = new Date(strTgl + 'T00:00:00');
-                if (!isNaN(d.getTime()) && d >= startPeriod && d <= endPeriod) listAbsen.push(item);
+                if (strTgl >= strStart && strTgl <= strEnd) listAbsen.push(item);
             });
 
             let listKasbon = [];
             Object.keys(rawKasbonData).forEach(k => {
                 let item = rawKasbonData[k];
                 let strTgl = (item.rawDate || item.tanggal || '').slice(0, 10);
-                let d = new Date(strTgl + 'T00:00:00');
-                if (!isNaN(d.getTime()) && d >= startPeriod && d <= endPeriod) listKasbon.push(item);
+                if (strTgl >= strStart && strTgl <= strEnd) listKasbon.push(item);
             });
 
             let totalHadir = listAbsen.filter(x => x.status === 'Hadir' || x.status === 'Lembur').length;
@@ -1095,20 +1122,31 @@
             let totalLemburCount = listAbsen.filter(x => x.lembur === true).length;
 
             let totalPotonganKurangJam = 0;
-            const tarifPerJam = (cfg.tipe === 'Harian' ? cfg.nominal : cfg.potongan) / 8;
+            let nominalGajiPokok = 0;
 
             listAbsen.forEach(item => {
+                let rateNominal = (item.savedNominal !== undefined) ? item.savedNominal : cfg.nominal;
+                let ratePotongan = (item.savedPotongan !== undefined) ? item.savedPotongan : cfg.potongan;
+                let ratePerJam = (cfg.tipe === 'Harian' ? rateNominal : ratePotongan) / 8;
+
+                if (cfg.tipe === 'Harian' && item.status !== 'Tidak Masuk') {
+                    nominalGajiPokok += rateNominal;
+                }
+
                 if (item.jamMasuk && item.jamPulang && item.status !== 'Tidak Masuk') {
                     let [h1, m1] = item.jamMasuk.split(':').map(Number);
                     let [h2, m2] = item.jamPulang.split(':').map(Number);
                     let durasiJam = (h2 + m2/60) - (h1 + m1/60);
                     if (durasiJam > 0 && durasiJam < 8) {
-                        totalPotonganKurangJam += ((8 - durasiJam) * tarifPerJam);
+                        totalPotonganKurangJam += ((8 - durasiJam) * ratePerJam);
                     }
                 }
             });
 
-            let nominalGajiPokok = (cfg.tipe === 'Bulanan') ? cfg.nominal : (totalHadir * cfg.nominal);
+            if (cfg.tipe === 'Bulanan') {
+                nominalGajiPokok = cfg.nominal;
+            }
+
             let totalLemburRp = totalLemburCount * cfg.lembur;
             let totalKotor = nominalGajiPokok + totalLemburRp;
 
@@ -1142,7 +1180,7 @@
             document.getElementById('printPotonganJamRow').innerText = `• Potongan Jam Kerja (<8 Jam):`;
             document.getElementById('printPotonganJamVal').innerText = `Rp ${Math.round(totalPotonganKurangJam).toLocaleString('id-ID')}`;
 
-            // MEMASTIKAN KASBON TERIISI KE CETAKAN PDF
+            // MENGISI ELEMEN ANKGA KASBON KE SLIP PDF
             document.getElementById('printKasbonRow').innerText = `• Total Kasbon:`;
             document.getElementById('printKasbonVal').innerText = `Rp ${totalKasbonRp.toLocaleString('id-ID')}`;
 
