@@ -609,7 +609,7 @@
             updateUI();
         }
 
-        // 5. UPDATE UI (KARYAWAN & ADMIN BISA PILIH BULAN LALU)
+        // 5. UPDATE UI (BEBAS FILTER PERIODE BULAN LALU & AKURAT)
         function updateUI() {
             if (!currentUser) return;
             const targetNama = (currentRole === 'admin') ? selectedKaryawan : currentUser;
@@ -634,22 +634,29 @@
             const rawAbsenData = localAbsen[targetNama] || {};
             const rawKasbonData = localKasbon[targetNama] || {};
 
+            // Processing Absensi
             let listAbsenPeriod = [];
             Object.keys(rawAbsenData).forEach(k => {
                 let item = rawAbsenData[k];
                 item._key = k;
-                let itemDate = new Date(item.rawDate + 'T00:00:00');
-                if (itemDate >= startPeriod && itemDate <= endPeriod) {
+                let strTgl = (item.rawDate || '').slice(0, 10);
+                let itemDate = new Date(strTgl + 'T00:00:00');
+                if (!isNaN(itemDate.getTime()) && itemDate >= startPeriod && itemDate <= endPeriod) {
                     listAbsenPeriod.push(item);
                 }
             });
 
+            // Processing Kasbon (FIXED BISA DILIHAT ADMIN SEMUA ATAU PER PERIODE KARYAWAN)
             let listKasbonPeriod = [];
             Object.keys(rawKasbonData).forEach(k => {
                 let item = rawKasbonData[k];
                 item._key = k;
-                let itemDate = new Date((item.rawDate || item.tanggal) + 'T00:00:00');
-                if (itemDate >= startPeriod && itemDate <= endPeriod) {
+                let strTgl = (item.rawDate || item.tanggal || '').slice(0, 10);
+                let itemDate = new Date(strTgl + 'T00:00:00');
+                
+                if (currentRole === 'admin') {
+                    listKasbonPeriod.push(item);
+                } else if (!isNaN(itemDate.getTime()) && itemDate >= startPeriod && itemDate <= endPeriod) {
                     listKasbonPeriod.push(item);
                 }
             });
@@ -777,8 +784,9 @@
             const tabelKasbon = document.getElementById('tabelKasbon');
             tabelKasbon.innerHTML = '';
             if (listKasbonPeriod.length === 0) {
-                tabelKasbon.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-2">Belum ada riwayat kasbon periode ini.</td></tr>`;
+                tabelKasbon.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-2">Belum ada riwayat kasbon.</td></tr>`;
             } else {
+                listKasbonPeriod.sort((a, b) => new Date(b.rawDate || b.tanggal) - new Date(a.rawDate || a.tanggal));
                 listKasbonPeriod.forEach((item, idx) => {
                     tabelKasbon.innerHTML += `
                         <tr>
@@ -917,7 +925,7 @@
             }
         }
 
-        // 7. ACTION KASBON (DENGAN TANGGAL PILIHAN)
+        // 7. ACTION KASBON (FORMAT TANGGAL STANDAR SANGAT PRESISI)
         function tambahKasbon() {
             const targetNama = (currentRole === 'admin') ? selectedKaryawan : currentUser;
             const tglManual = document.getElementById('inputTanggalKasbon').value;
@@ -928,8 +936,14 @@
 
             const skrg = new Date();
             const rawDate = tglManual || skrg.toISOString().slice(0, 10);
-            const dateObj = new Date(rawDate + 'T00:00:00');
-            const tanggalStr = dateObj.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+            
+            // Format string tampilan (contoh: 22 Okt 2026)
+            const parts = rawDate.split('-');
+            let tanggalStr = rawDate;
+            if (parts.length === 3) {
+                const d = new Date(parts[0], parts[1] - 1, parts[2]);
+                tanggalStr = d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+            }
 
             refKasbon.child(targetNama).push({
                 rawDate: rawDate,
@@ -1064,15 +1078,17 @@
             let listAbsen = [];
             Object.keys(rawAbsenData).forEach(k => {
                 let item = rawAbsenData[k];
-                let d = new Date(item.rawDate + 'T00:00:00');
-                if (d >= startPeriod && d <= endPeriod) listAbsen.push(item);
+                let strTgl = (item.rawDate || '').slice(0, 10);
+                let d = new Date(strTgl + 'T00:00:00');
+                if (!isNaN(d.getTime()) && d >= startPeriod && d <= endPeriod) listAbsen.push(item);
             });
 
             let listKasbon = [];
             Object.keys(rawKasbonData).forEach(k => {
                 let item = rawKasbonData[k];
-                let d = new Date((item.rawDate || item.tanggal) + 'T00:00:00');
-                if (d >= startPeriod && d <= endPeriod) listKasbon.push(item);
+                let strTgl = (item.rawDate || item.tanggal || '').slice(0, 10);
+                let d = new Date(strTgl + 'T00:00:00');
+                if (!isNaN(d.getTime()) && d >= startPeriod && d <= endPeriod) listKasbon.push(item);
             });
 
             let totalHadir = listAbsen.filter(x => x.status === 'Hadir' || x.status === 'Lembur').length;
