@@ -609,7 +609,7 @@
             updateUI();
         }
 
-        // 5. UPDATE UI (KUNCI NOMINAL GAJI TERSIMPAN DI RIWAYAT & FILTER KASBON FIX)
+        // 5. UPDATE UI (KUNCI NOMINAL GAJI TERSIMPAN DI RIWAYAT & FILTER KASBON STRICT SIKLUS)
         function updateUI() {
             if (!currentUser) return;
             const targetNama = (currentRole === 'admin') ? selectedKaryawan : currentUser;
@@ -649,21 +649,19 @@
                 }
             });
 
-            // Processing Kasbon
+            // Processing Kasbon (STRICT FILTER HARUS SESUAI RENTANG SIKLUS PERIODE TERPILIH)
             let listKasbonPeriod = [];
             Object.keys(rawKasbonData).forEach(k => {
                 let item = rawKasbonData[k];
                 item._key = k;
                 let strTgl = (item.rawDate || item.tanggal || '').slice(0, 10);
                 
-                if (currentRole === 'admin') {
-                    listKasbonPeriod.push(item);
-                } else if (strTgl >= strStart && strTgl <= strEnd) {
+                if (strTgl >= strStart && strTgl <= strEnd) {
                     listKasbonPeriod.push(item);
                 }
             });
 
-            // Perhitungan Stat (Gaji Pokok Karyawan menggunakan penguncian nilai riwayat)
+            // Perhitungan Stat
             let totalHadir = listAbsenPeriod.filter(x => x.status === 'Hadir' || x.status === 'Lembur').length;
             let totalAbsen = listAbsenPeriod.filter(x => x.status === 'Tidak Masuk').length;
             let totalLemburCount = listAbsenPeriod.filter(x => x.lembur === true).length;
@@ -672,7 +670,6 @@
             let totalGajiAbsen = 0;
 
             listAbsenPeriod.forEach(item => {
-                // Memakai tarif harian terkunci di riwayat item, jika tidak ada baru panggil cfg
                 let rateNominal = (item.savedNominal !== undefined) ? item.savedNominal : cfg.nominal;
                 let ratePotongan = (item.savedPotongan !== undefined) ? item.savedPotongan : cfg.potongan;
                 let ratePerJam = (cfg.tipe === 'Harian' ? rateNominal : ratePotongan) / 8;
@@ -801,7 +798,7 @@
             const tabelKasbon = document.getElementById('tabelKasbon');
             tabelKasbon.innerHTML = '';
             if (listKasbonPeriod.length === 0) {
-                tabelKasbon.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-2">Belum ada riwayat kasbon.</td></tr>`;
+                tabelKasbon.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-2">Belum ada riwayat kasbon periode ini.</td></tr>`;
             } else {
                 listKasbonPeriod.sort((a, b) => new Date(b.rawDate || b.tanggal) - new Date(a.rawDate || a.tanggal));
                 listKasbonPeriod.forEach((item, idx) => {
@@ -1089,7 +1086,7 @@
             }
         }
 
-        // 9. CETAK SLIP GAJI PDF PERIODE TERPILIH (R21 POOL & CAFE COMPACT - SINKRON PASTI KASBON)
+        // 9. CETAK SLIP GAJI PDF PERIODE TERPILIH (R21 POOL & CAFE COMPACT)
         function cetakPDF() {
             const targetNama = (currentRole === 'admin') ? selectedKaryawan : currentUser;
             const cfg = getSettingGaji(targetNama);
@@ -1180,7 +1177,7 @@
             document.getElementById('printPotonganJamRow').innerText = `• Potongan Jam Kerja (<8 Jam):`;
             document.getElementById('printPotonganJamVal').innerText = `Rp ${Math.round(totalPotonganKurangJam).toLocaleString('id-ID')}`;
 
-            // MENGISI ELEMEN ANKGA KASBON KE SLIP PDF
+            // MENGISI ELEMEN ANGKA KASBON KE SLIP PDF
             document.getElementById('printKasbonRow').innerText = `• Total Kasbon:`;
             document.getElementById('printKasbonVal').innerText = `Rp ${totalKasbonRp.toLocaleString('id-ID')}`;
 
