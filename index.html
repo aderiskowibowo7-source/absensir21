@@ -646,7 +646,7 @@
                 }
             });
 
-            // Processing Kasbon (FIXED BISA DILIHAT ADMIN SEMUA ATAU PER PERIODE KARYAWAN)
+            // Processing Kasbon
             let listKasbonPeriod = [];
             Object.keys(rawKasbonData).forEach(k => {
                 let item = rawKasbonData[k];
@@ -925,7 +925,7 @@
             }
         }
 
-        // 7. ACTION KASBON (FORMAT TANGGAL STANDAR SANGAT PRESISI)
+        // 7. ACTION KASBON (DENGAN TANGGAL PILIHAN)
         function tambahKasbon() {
             const targetNama = (currentRole === 'admin') ? selectedKaryawan : currentUser;
             const tglManual = document.getElementById('inputTanggalKasbon').value;
@@ -937,7 +937,6 @@
             const skrg = new Date();
             const rawDate = tglManual || skrg.toISOString().slice(0, 10);
             
-            // Format string tampilan (contoh: 22 Okt 2026)
             const parts = rawDate.split('-');
             let tanggalStr = rawDate;
             if (parts.length === 3) {
@@ -1064,7 +1063,7 @@
             }
         }
 
-        // 9. CETAK SLIP GAJI PDF PERIODE TERPILIH (R21 POOL & CAFE COMPACT)
+        // 9. CETAK SLIP GAJI PDF PERIODE TERPILIH (R21 POOL & CAFE COMPACT - FIXED KASBON)
         function cetakPDF() {
             const targetNama = (currentRole === 'admin') ? selectedKaryawan : currentUser;
             const cfg = getSettingGaji(targetNama);
@@ -1143,11 +1142,11 @@
             document.getElementById('printPotonganJamRow').innerText = `• Potongan Jam Kerja (<8 Jam):`;
             document.getElementById('printPotonganJamVal').innerText = `Rp ${Math.round(totalPotonganKurangJam).toLocaleString('id-ID')}`;
 
-            document.getElementById('printKasbonRow').innerText = `• Kasbon:`;
+            // MEMASTIKAN KASBON TERIISI KE CETAKAN PDF
+            document.getElementById('printKasbonRow').innerText = `• Total Kasbon:`;
             document.getElementById('printKasbonVal').innerText = `Rp ${totalKasbonRp.toLocaleString('id-ID')}`;
 
             document.getElementById('printTotalPotonganSimple').innerText = `Rp ${Math.round(totalPotongan).toLocaleString('id-ID')}`;
-
             document.getElementById('printGajiBersihSimple').innerText = `Rp ${Math.round(gajiBersih).toLocaleString('id-ID')}`;
 
             window.print();
