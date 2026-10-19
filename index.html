@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistem Absensi & Payroll R21</title>
+    <title>Absensi & Payroll - R21 POOL & CAFE</title>
     <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- FontAwesome Icons -->
@@ -17,52 +17,110 @@
         .table-sm td, .table-sm th { padding: 0.35rem 0.5rem; font-size: 0.82rem; }
         .badge-compact { font-size: 0.72rem; padding: 0.25em 0.5em; }
         .stat-card { border-left: 3.5px solid #0d6efd; background: #fff; }
+        
+        /* DESAIN SLIP GAJI PDF COMPACT R21 POOL & CAFE */
         @media print {
             .no-print { display: none !important; }
-            body { background-color: #fff; }
+            body { background-color: #fff; color: #000; font-family: Arial, sans-serif; }
             .card { border: none !important; box-shadow: none !important; }
+        }
+        .slip-box {
+            max-width: 450px;
+            margin: auto;
+            border: 1px solid #333;
+            padding: 15px;
+            border-radius: 6px;
         }
     </style>
 </head>
 <body>
 
-    <!-- CETAK SLIP GAJI PDF (RINGKAS & SIMPEL) -->
-    <div class="d-none d-print-block p-3" style="font-family: Arial, sans-serif; color: #000;">
-        <h4 class="fw-bold text-center mb-1">SLIP GAJI KARYAWAN</h4>
-        <p id="printPeriodeGaji" class="text-center mb-3 text-muted small"></p>
-        
-        <h5 class="fw-bold border-bottom pb-2 mb-3">Rincian Perhitungan Gaji: <span id="printNamaSimple" class="text-uppercase"></span></h5>
-        
-        <div style="font-size: 14px; line-height: 1.7;">
-            <p class="mb-1" id="printGajiPokokRow">Gaji Pokok: Rp0</p>
-            <p class="mb-1" id="printLemburRow">Uang Lembur: Rp0</p>
-            <p class="fw-bold mb-2">Total Pendapatan Kotor: <span id="printTotalKotorSimple">Rp0</span></p>
-            
-            <p class="fw-bold mb-1">Potongan:</p>
-            <div class="ps-3 mb-2">
-                <p class="mb-1" id="printPotonganAbsenRow">• Potongan Tidak Masuk: Rp0</p>
-                <p class="mb-1" id="printPotonganJamRow">• Potongan Kurang Jam Kerja (&lt;8 Jam): Rp0</p>
-                <p class="mb-1" id="printKasbonRow">• Kasbon: Rp0</p>
+    <!-- CETAK SLIP GAJI PDF RINGKAS (R21 POOL & CAFE) -->
+    <div class="d-none d-print-block">
+        <div class="slip-box">
+            <div class="text-center border-bottom pb-2 mb-2">
+                <h5 class="fw-bold mb-0">R21 POOL & CAFE</h5>
+                <small class="fw-bold text-uppercase">SLIP GAJI KARYAWAN</small>
+                <div id="printPeriodeGaji" class="small text-muted" style="font-size: 0.75rem;"></div>
             </div>
-            <p class="fw-bold mb-3">Total Potongan: <span id="printTotalPotonganSimple">Rp0</span></p>
             
-            <hr style="border-top: 2px dashed #000;">
-            
-            <div class="p-2 border rounded bg-light mt-2">
-                <h5 class="fw-bold mb-1">SISA GAJI BERSIH:</h5>
-                <h3 class="fw-bold text-success mb-0" id="printGajiBersihSimple">Rp0</h3>
+            <table class="w-100 mb-2" style="font-size: 0.82rem;">
+                <tr>
+                    <td>Nama Karyawan</td>
+                    <td>: <strong id="printNamaSimple" class="text-uppercase"></strong></td>
+                </tr>
+                <tr>
+                    <td>Tanggal Cetak</td>
+                    <td>: <span id="printTanggalCetak"></span></td>
+                </tr>
+            </table>
+
+            <div class="border-top border-bottom py-2 mb-2" style="font-size: 0.82rem;">
+                <div class="d-flex justify-content-between mb-1">
+                    <span id="printGajiPokokRow">Gaji Pokok:</span>
+                    <strong id="printGajiPokokVal">Rp 0</strong>
+                </div>
+                <div class="d-flex justify-content-between mb-1">
+                    <span id="printLemburRow">Uang Lembur:</span>
+                    <strong id="printLemburVal">Rp 0</strong>
+                </div>
+                <div class="d-flex justify-content-between border-top pt-1 fw-bold text-success">
+                    <span>Total Pendapatan Kotor:</span>
+                    <span id="printTotalKotorSimple">Rp 0</span>
+                </div>
+            </div>
+
+            <div class="mb-2" style="font-size: 0.82rem;">
+                <span class="fw-bold d-block mb-1 text-danger">Potongan:</span>
+                <div class="ps-2">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span id="printPotonganAbsenRow">• Absen Tidak Masuk</span>
+                        <span id="printPotonganAbsenVal">Rp 0</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-1">
+                        <span id="printPotonganJamRow">• Kurang Jam (&lt;8 Jam)</span>
+                        <span id="printPotonganJamVal">Rp 0</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-1">
+                        <span id="printKasbonRow">• Kasbon</span>
+                        <span id="printKasbonVal">Rp 0</span>
+                    </div>
+                </div>
+                <div class="d-flex justify-content-between border-top pt-1 fw-bold text-danger">
+                    <span>Total Potongan:</span>
+                    <span id="printTotalPotonganSimple">Rp 0</span>
+                </div>
+            </div>
+
+            <div class="p-2 border rounded text-center bg-light mt-2">
+                <span class="fw-bold d-block small">TAKE HOME PAY (GAJI BERSIH):</span>
+                <h4 class="fw-bold text-dark mb-0" id="printGajiBersihSimple">Rp 0</h4>
+            </div>
+
+            <div class="d-flex justify-content-between text-center mt-4 pt-2" style="font-size: 0.75rem;">
+                <div>
+                    <div>Penerima,</div>
+                    <br><br>
+                    <strong id="printNamaTtd"></strong>
+                </div>
+                <div>
+                    <div>Pengelola,</div>
+                    <br><br>
+                    <strong>R21 POOL & CAFE</strong>
+                </div>
             </div>
         </div>
     </div>
 
-    <!-- TAMPILAN LAYAR LOGIN -->
+    <!-- LAYAR LOGIN -->
     <div id="loginSection" class="container py-5 no-print">
         <div class="row justify-content-center">
             <div class="col-md-4 col-sm-8">
                 <div class="card shadow-sm border-0">
                     <div class="card-body text-center p-4">
                         <i class="fa-solid fa-user-lock text-primary fa-3x mb-2"></i>
-                        <h5 class="fw-bold mb-3">Login Sistem Absensi</h5>
+                        <h5 class="fw-bold mb-1">R21 POOL & CAFE</h5>
+                        <p class="text-muted small mb-3">Sistem Absensi & Payroll</p>
                         <form id="formLogin" onsubmit="prosesLogin(event)">
                             <div class="mb-2 text-start">
                                 <label class="form-label small fw-semibold mb-1">Pilih User / Karyawan</label>
@@ -107,16 +165,16 @@
             </div>
         </div>
 
-        <!-- Mode Filter Karyawan (Khusus Admin) & Pilihan Periode Gajian -->
-        <div id="adminFilterPanel" class="card shadow-sm border-primary mb-2" style="display: none;">
+        <!-- Filter Admin & Selection Periode untuk Karyawan/Admin -->
+        <div class="card shadow-sm border-primary mb-2">
             <div class="card-body py-2">
                 <div class="row g-2 align-items-center">
-                    <div class="col-md-5 col-6">
-                        <label class="form-label small fw-bold text-primary mb-0">Pilih Karyawan Dipantau:</label>
+                    <div class="col-md-5 col-6" id="adminFilterPanel" style="display: none;">
+                        <label class="form-label small fw-bold text-primary mb-0">Pantau Karyawan:</label>
                         <select id="selectKaryawanAdmin" class="form-select form-select-sm fw-bold" onchange="gantiKaryawanAdmin()"></select>
                     </div>
-                    <div class="col-md-7 col-6 text-end">
-                        <span class="small text-muted d-block">Pilihan Periode Gajian:</span>
+                    <div class="col-md-7 col-12 ms-auto text-end">
+                        <span class="small text-muted d-block mb-1">Pilih Periode Siklus Gajian:</span>
                         <div id="labelSiklusGaji"></div>
                     </div>
                 </div>
@@ -339,7 +397,6 @@
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body py-2">
-                    <!-- Form Tambah User Baru -->
                     <div class="border p-2 rounded mb-3 bg-light">
                         <span class="fw-bold small d-block mb-1 text-primary">Tambah Karyawan Baru</span>
                         <div class="row g-1">
@@ -348,7 +405,6 @@
                             <div class="col-3"><button onclick="tambahUserBaru()" class="btn btn-success btn-sm w-100 fw-bold">+</button></div>
                         </div>
                     </div>
-                    <!-- Tabel List User & PIN -->
                     <span class="fw-bold small d-block mb-1">Daftar Akun Terdaftar:</span>
                     <div class="table-responsive">
                         <table class="table table-sm table-bordered align-middle">
@@ -385,17 +441,15 @@
         }
         const db = firebase.database();
 
-        // Node References
         const refUsers = db.ref('absensi_karyawan/users');
         const refGaji = db.ref('absensi_karyawan/setting_gaji');
         const refAbsen = db.ref('absensi_karyawan/riwayat_absen');
         const refKasbon = db.ref('absensi_karyawan/riwayat_kasbon');
 
-        // State Global
         let currentUser = null;
         let currentRole = null;
         let selectedKaryawan = null; 
-        let selectedPeriodeOffset = 0; // 0 = Periode Berjalan, -1 = 1 Bulan Lalu, -2 = 2 Bulan Lalu
+        let selectedPeriodeOffset = 0; // 0 = Bulan Ini, -1 = Bulan Lalu, -2 = 2 Bulan Lalu
         
         let localUsers = {};
         let localGaji = {};
@@ -434,7 +488,7 @@
 
         initRealtimeListeners();
 
-        // 3. LOGIKA AUTHENTICATION & LOGIN
+        // 3. LOGIKA AUTHENTICATION
         function renderLoginDropdown() {
             const select = document.getElementById('loginUser');
             select.innerHTML = '';
@@ -518,29 +572,29 @@
             updateUI();
         }
 
-        // 4. HELPER GAJI & SIKLUS INDIVIDUAL
+        // 4. HELPER GAJI & HITUNG PERIODE DINAMIS
         function getSettingGaji(nama) {
             return localGaji[nama] || {
                 tipe: 'Harian',
                 nominal: 50000,
                 lembur: 50000,
                 potongan: 50000,
-                siklusTanggal: 19 // Default sesuai tgl masuk
+                siklusTanggal: 19
             };
         }
 
         function getRentangPeriode(cutoffDay, offsetMonths = 0) {
             const now = new Date();
-            let baseYear = now.getFullYear();
-            let baseMonth = now.getMonth() + offsetMonths;
+            let year = now.getFullYear();
+            let month = now.getMonth() + offsetMonths;
 
             let startPeriod, endPeriod;
             if (now.getDate() >= cutoffDay) {
-                startPeriod = new Date(baseYear, baseMonth, cutoffDay, 0, 0, 0);
-                endPeriod = new Date(baseYear, baseMonth + 1, cutoffDay - 1, 23, 59, 59);
+                startPeriod = new Date(year, month, cutoffDay, 0, 0, 0);
+                endPeriod = new Date(year, month + 1, cutoffDay - 1, 23, 59, 59);
             } else {
-                startPeriod = new Date(baseYear, baseMonth - 1, cutoffDay, 0, 0, 0);
-                endPeriod = new Date(baseYear, baseMonth, cutoffDay - 1, 23, 59, 59);
+                startPeriod = new Date(year, month - 1, cutoffDay, 0, 0, 0);
+                endPeriod = new Date(year, month, cutoffDay - 1, 23, 59, 59);
             }
             return { startPeriod, endPeriod };
         }
@@ -550,7 +604,7 @@
             updateUI();
         }
 
-        // 5. UPDATE UI DENGAN DUKUNGAN PERIODE LALU
+        // 5. UPDATE UI (KARYAWAN & ADMIN BISA PILIH BULAN LALU)
         function updateUI() {
             if (!currentUser) return;
             const targetNama = (currentRole === 'admin') ? selectedKaryawan : currentUser;
@@ -564,9 +618,8 @@
             const fmtStart = startPeriod.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
             const fmtEnd = endPeriod.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
             
-            // Pasang Dropdown Pilihan Periode di Header Filter
             document.getElementById('labelSiklusGaji').innerHTML = `
-                <select onchange="gantiPeriodeOffset(this.value)" class="form-select form-select-sm fw-bold border-primary" style="font-size:0.78rem;">
+                <select onchange="gantiPeriodeOffset(this.value)" class="form-select form-select-sm fw-bold border-primary" style="font-size:0.8rem;">
                     <option value="0" ${selectedPeriodeOffset === 0 ? 'selected' : ''}>Bulan Ini (${fmtStart} - ${fmtEnd})</option>
                     <option value="-1" ${selectedPeriodeOffset === -1 ? 'selected' : ''}>Bulan Lalu (Siklus Sebelumnya)</option>
                     <option value="-2" ${selectedPeriodeOffset === -2 ? 'selected' : ''}>2 Bulan Lalu</option>
@@ -596,7 +649,7 @@
                 }
             });
 
-            // Perhitungan Stat Periode Terpilih
+            // Perhitungan Stat
             let totalHadir = listAbsenPeriod.filter(x => x.status === 'Hadir' || x.status === 'Lembur').length;
             let totalAbsen = listAbsenPeriod.filter(x => x.status === 'Tidak Masuk').length;
             let totalLemburCount = listAbsenPeriod.filter(x => x.lembur === true).length;
@@ -986,7 +1039,7 @@
             }
         }
 
-        // 9. CETAK SLIP GAJI PDF PERIODE TERPILIH
+        // 9. CETAK SLIP GAJI PDF PERIODE TERPILIH (R21 POOL & CAFE COMPACT)
         function cetakPDF() {
             const targetNama = (currentRole === 'admin') ? selectedKaryawan : currentUser;
             const cfg = getSettingGaji(targetNama);
@@ -1011,7 +1064,7 @@
                 if (d >= startPeriod && d <= endPeriod) listKasbon.push(item);
             });
 
-            let totalHadir = listAbsen.filter(x => x.status === 'Hadir').length;
+            let totalHadir = listAbsen.filter(x => x.status === 'Hadir' || x.status === 'Lembur').length;
             let totalAbsen = listAbsen.filter(x => x.status === 'Tidak Masuk').length;
             let totalLemburCount = listAbsen.filter(x => x.lembur === true).length;
 
@@ -1039,21 +1092,33 @@
 
             let gajiBersih = totalKotor - totalPotongan;
 
+            const now = new Date();
             document.getElementById('printNamaSimple').innerText = targetNama;
-            document.getElementById('printPeriodeGaji').innerText = `Periode Gajian: ${startPeriod.toLocaleDateString('id-ID')} s/d ${endPeriod.toLocaleDateString('id-ID')}`;
+            document.getElementById('printNamaTtd').innerText = targetNama;
+            document.getElementById('printTanggalCetak').innerText = now.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+            document.getElementById('printPeriodeGaji').innerText = `${startPeriod.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })} s/d ${endPeriod.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}`;
 
             if (cfg.tipe === 'Bulanan') {
-                document.getElementById('printGajiPokokRow').innerText = `Gaji Pokok (Bulanan): Rp ${nominalGajiPokok.toLocaleString('id-ID')}`;
+                document.getElementById('printGajiPokokRow').innerText = `Gaji Pokok (Bulanan):`;
             } else {
-                document.getElementById('printGajiPokokRow').innerText = `Gaji Pokok (${totalHadir} Hari x Rp ${cfg.nominal.toLocaleString('id-ID')}): Rp ${nominalGajiPokok.toLocaleString('id-ID')}`;
+                document.getElementById('printGajiPokokRow').innerText = `Gaji Pokok (${totalHadir} Hari x Rp ${(cfg.nominal).toLocaleString('id-ID')}):`;
             }
+            document.getElementById('printGajiPokokVal').innerText = `Rp ${nominalGajiPokok.toLocaleString('id-ID')}`;
 
-            document.getElementById('printLemburRow').innerText = `Uang Lembur (${totalLemburCount} Hari x Rp ${cfg.lembur.toLocaleString('id-ID')}): Rp ${totalLemburRp.toLocaleString('id-ID')}`;
+            document.getElementById('printLemburRow').innerText = `Uang Lembur (${totalLemburCount} Hari x Rp ${(cfg.lembur).toLocaleString('id-ID')}):`;
+            document.getElementById('printLemburVal').innerText = `Rp ${totalLemburRp.toLocaleString('id-ID')}`;
+
             document.getElementById('printTotalKotorSimple').innerText = `Rp ${Math.round(totalKotor).toLocaleString('id-ID')}`;
 
-            document.getElementById('printPotonganAbsenRow').innerText = `• Potongan Tidak Masuk (${totalAbsen} Hari x Rp ${cfg.potongan.toLocaleString('id-ID')}): Rp ${totalPotonganAbsen.toLocaleString('id-ID')}`;
-            document.getElementById('printPotonganJamRow').innerText = `• Potongan Kurang Jam Kerja (<8 Jam): Rp ${Math.round(totalPotonganKurangJam).toLocaleString('id-ID')}`;
-            document.getElementById('printKasbonRow').innerText = `• Kasbon: Rp ${totalKasbonRp.toLocaleString('id-ID')}`;
+            document.getElementById('printPotonganAbsenRow').innerText = `• Absen Tidak Masuk (${totalAbsen} Hari):`;
+            document.getElementById('printPotonganAbsenVal').innerText = `Rp ${totalPotonganAbsen.toLocaleString('id-ID')}`;
+
+            document.getElementById('printPotonganJamRow').innerText = `• Potongan Jam Kerja (<8 Jam):`;
+            document.getElementById('printPotonganJamVal').innerText = `Rp ${Math.round(totalPotonganKurangJam).toLocaleString('id-ID')}`;
+
+            document.getElementById('printKasbonRow').innerText = `• Kasbon:`;
+            document.getElementById('printKasbonVal').innerText = `Rp ${totalKasbonRp.toLocaleString('id-ID')}`;
+
             document.getElementById('printTotalPotonganSimple').innerText = `Rp ${Math.round(totalPotongan).toLocaleString('id-ID')}`;
 
             document.getElementById('printGajiBersihSimple').innerText = `Rp ${Math.round(gajiBersih).toLocaleString('id-ID')}`;
@@ -1061,3 +1126,5 @@
             window.print();
         }
     </script>
+</body>
+</html>
