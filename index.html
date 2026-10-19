@@ -13,6 +13,7 @@
         .card { border-radius: 8px; margin-bottom: 0.75rem; }
         .card-body, .card-header { padding: 0.6rem 0.8rem; }
         .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.8rem; }
+        .btn-xs { padding: 0.15rem 0.35rem; font-size: 0.75rem; }
         .table-sm td, .table-sm th { padding: 0.35rem 0.5rem; font-size: 0.82rem; }
         .badge-compact { font-size: 0.72rem; padding: 0.25em 0.5em; }
         .stat-card { border-left: 3.5px solid #0d6efd; background: #fff; }
@@ -40,7 +41,7 @@
             <p class="fw-bold mb-1">Potongan:</p>
             <div class="ps-3 mb-2">
                 <p class="mb-1" id="printPotonganAbsenRow">• Potongan Tidak Masuk: Rp0</p>
-                <p class="mb-1" id="printPotonganJamRow">• Potongan Kurang Jam Kerja (<8 Jam): Rp0</p>
+                <p class="mb-1" id="printPotonganJamRow">• Potongan Kurang Jam Kerja (&lt;8 Jam): Rp0</p>
                 <p class="mb-1" id="printKasbonRow">• Kasbon: Rp0</p>
             </div>
             <p class="fw-bold mb-3">Total Potongan: <span id="printTotalPotonganSimple">Rp0</span></p>
@@ -405,10 +406,8 @@
 
         // 2. REALTIME LISTENERS FIREBASE
         function initRealtimeListeners() {
-            // Listeners Users
             refUsers.on('value', snapshot => {
                 localUsers = snapshot.val() || {};
-                // Default akun admin jika database masih kosong
                 if (!localUsers['admin']) {
                     refUsers.child('admin').set({ pin: '1234', role: 'admin', nama: 'Admin' });
                 }
@@ -416,19 +415,16 @@
                 renderTabelUserModal();
             });
 
-            // Listeners Setting Gaji
             refGaji.on('value', snapshot => {
                 localGaji = snapshot.val() || {};
                 updateUI();
             });
 
-            // Listeners Absensi
             refAbsen.on('value', snapshot => {
                 localAbsen = snapshot.val() || {};
                 updateUI();
             });
 
-            // Listeners Kasbon
             refKasbon.on('value', snapshot => {
                 localKasbon = snapshot.val() || {};
                 updateUI();
@@ -459,9 +455,10 @@
             if (u && u.pin === inputPin) {
                 currentUser = u.nama;
                 currentRole = u.role;
-                selectedKaryawan = (currentRole === 'admin') ? (Object.keys(localUsers).find(k => localUsers[k].role !== 'admin') ? localUsers[Object.keys(localUsers).find(k => localUsers[k].role !== 'admin')].nama : 'Aris') : currentUser;
+                
+                const nonAdminKey = Object.keys(localUsers).find(k => localUsers[k].role !== 'admin');
+                selectedKaryawan = (currentRole === 'admin') ? (nonAdminKey ? localUsers[nonAdminKey].nama : 'Aris') : currentUser;
 
-                // Tampilkan Sesi
                 document.getElementById('loginSection').style.display = 'none';
                 document.getElementById('appSection').style.display = 'block';
 
@@ -518,7 +515,7 @@
             updateUI();
         }
 
-        // 4. LOGIKA HELPER SETTING GAJI & PERIODE SIKLUS
+        // 4. HELPER GAJI & SIKLUS
         function getSettingGaji(nama) {
             return localGaji[nama] || {
                 tipe: 'Harian',
@@ -529,7 +526,7 @@
             };
         }
 
-        // 5. UPDATE UI, DASHBOARD & PERHITUNGAN 8 JAM KERJA
+        // 5. UPDATE UI & PERHITUNGAN 8 JAM KERJA
         function updateUI() {
             if (!currentUser) return;
             const targetNama = (currentRole === 'admin') ? selectedKaryawan : currentUser;
@@ -538,7 +535,6 @@
             const cfg = getSettingGaji(targetNama);
             document.getElementById('labelSiklusGaji').innerText = `Tgl ${cfg.siklusTanggal || 9} Bulan ke Bulan`;
 
-            // Filter Periode Gajian Berjalan Berdasarkan Siklus Tanggal
             const now = new Date();
             let startPeriod, endPeriod;
             const cutoffDay = cfg.siklusTanggal || 9;
@@ -551,7 +547,6 @@
                 endPeriod = new Date(now.getFullYear(), now.getMonth(), cutoffDay - 1, 23, 59, 59);
             }
 
-            // Ambil Data Absen & Kasbon Karyawan
             const rawAbsenData = localAbsen[targetNama] || {};
             const rawKasbonData = localKasbon[targetNama] || {};
 
@@ -575,7 +570,6 @@
                 }
             });
 
-            // Hitung Statistik
             let totalHadir = listAbsenPeriod.filter(x => x.status === 'Hadir' || x.status === 'Lembur').length;
             let totalAbsen = listAbsenPeriod.filter(x => x.status === 'Tidak Masuk').length;
             let totalLemburCount = listAbsenPeriod.filter(x => x.lembur === true).length;
@@ -605,7 +599,6 @@
 
             let gajiBersih = totalKotor - totalPotongan;
 
-            // Render ke Dashboard STATS
             document.getElementById('totalHadir').innerText = `${totalHadir} Hari`;
             document.getElementById('totalAbsen').innerText = `${totalAbsen} Hari`;
             document.getElementById('totalLembur').innerText = `${totalLemburCount} Kali`;
@@ -613,7 +606,6 @@
             document.getElementById('totalKasbon').innerText = `Rp ${Math.round(totalPotongan).toLocaleString('id-ID')}`;
             document.getElementById('gajiBersih').innerText = `Rp ${Math.round(gajiBersih).toLocaleString('id-ID')}`;
 
-            // Control Button Absen Hari Ini
             const todayFormatted = new Date().toISOString().slice(0, 10);
             const absenHariIniKey = Object.keys(rawAbsenData).find(k => rawAbsenData[k].rawDate === todayFormatted);
             const absenHariIni = absenHariIniKey ? rawAbsenData[absenHariIniKey] : null;
@@ -648,7 +640,6 @@
                 badgeHariIni.className = 'badge bg-secondary badge-compact';
             }
 
-            // Render Tabel Riwayat Absensi
             const tabelRiwayat = document.getElementById('tabelRiwayat');
             tabelRiwayat.innerHTML = '';
             if (listAbsenPeriod.length === 0) {
@@ -698,7 +689,6 @@
                 });
             }
 
-            // Render Tabel Riwayat Kasbon
             const tabelKasbon = document.getElementById('tabelKasbon');
             tabelKasbon.innerHTML = '';
             if (listKasbonPeriod.length === 0) {
@@ -720,7 +710,7 @@
             }
         }
 
-        // 6. ACTION ABSENSI & KASBON
+        // 6. ACTION ABSENSI
         function lakukanAbsenMasuk() {
             const targetNama = (currentRole === 'admin') ? selectedKaryawan : currentUser;
             const jamManual = document.getElementById('inputJamManual').value;
@@ -794,28 +784,48 @@
             alert('Status Tidak Masuk Dicatat!');
         }
 
-        // Susulan Admin (Backfill Tanpa Label Susulan)
+        // SUSULAN ADMIN (FIXED & BISA INPUT SUSULAN MULTI-USER)
         function simpanAbsenSusulanAdmin() {
-            if (currentRole !== 'admin') return;
-            const targetNama = selectedKaryawan;
+            if (currentRole !== 'admin') {
+                return alert('Hanya Admin yang bisa menginput susulan!');
+            }
+
+            let targetNama = selectedKaryawan;
+            if (!targetNama) {
+                const select = document.getElementById('selectKaryawanAdmin');
+                if (select && select.value) {
+                    targetNama = select.value;
+                    selectedKaryawan = targetNama;
+                } else {
+                    return alert('Pilih nama karyawan terlebih dahulu!');
+                }
+            }
+
             const tgl = document.getElementById('susulanTanggal').value;
             const jamM = document.getElementById('susulanJamMasuk').value;
             const jamP = document.getElementById('susulanJamPulang').value;
             const st = document.getElementById('susulanStatus').value;
 
-            if (!tgl) return alert('Pilih Tanggal!');
+            if (!tgl) return alert('Pilih tanggal susulan!');
 
             const newAbsen = {
                 rawDate: tgl,
-                jamMasuk: (st !== 'Tidak Masuk') ? jamM : '',
-                jamPulang: (st !== 'Tidak Masuk') ? jamP : '',
+                jamMasuk: (st !== 'Tidak Masuk') ? (jamM || '08:00') : '',
+                jamPulang: (st !== 'Tidak Masuk') ? (jamP || '16:00') : '',
                 status: (st === 'Tidak Masuk') ? 'Tidak Masuk' : 'Hadir',
                 lembur: (st === 'Lembur'),
                 catatan: ''
             };
 
-            refAbsen.child(targetNama).push(newAbsen);
-            alert('Data Berhasil Disimpan!');
+            refAbsen.child(targetNama).push(newAbsen)
+                .then(() => {
+                    alert(`Absen susulan untuk ${targetNama} tanggal ${tgl} disimpan!`);
+                    document.getElementById('susulanTanggal').value = '';
+                    updateUI();
+                })
+                .catch(err => {
+                    alert('Gagal simpan: ' + err.message);
+                });
         }
 
         function hapusAbsenItem(key) {
@@ -856,7 +866,7 @@
             }
         }
 
-        // 8. MODAL MODAL ACTION (SETTING GAJI & AKUN USER)
+        // 8. MODAL ACTIONS
         let bsModalGaji, bsModalAkun;
 
         function bukaModalGaji() {
@@ -952,12 +962,11 @@
             }
         }
 
-        // 9. CETAK SLIP GAJI PDF RINGKAS
+        // 9. CETAK SLIP GAJI PDF
         function cetakPDF() {
             const targetNama = (currentRole === 'admin') ? selectedKaryawan : currentUser;
             const cfg = getSettingGaji(targetNama);
 
-            // Filter Periode
             const now = new Date();
             let startPeriod, endPeriod;
             const cutoffDay = cfg.siklusTanggal || 9;
