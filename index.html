@@ -8,30 +8,8 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
-        body { background-color: #f0f2f5; font-size: 0.88rem; }
-        .card { border-radius: 8px; margin-bottom: 0.75rem; }
-        .card-body, .card-header { padding: 0.6rem 0.8rem; }
-        .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.8rem; }
-        .btn-xs { padding: 0.15rem 0.35rem; font-size: 0.75rem; }
-        .table-sm td, .table-sm th { padding: 0.35rem 0.5rem; font-size: 0.82rem; }
-        .badge-compact { font-size: 0.72rem; padding: 0.25em 0.5em; }
-        .stat-card { border-left: 3.5px solid #0d6efd; background: #fff; }
-        
-        /* DESAIN SLIP GAJI PDF COMPACT R21 POOL & CAFE */
-        @media print {
-            .no-print { display: none !important; }
-            body { background-color: #fff; color: #000; font-family: Arial, sans-serif; }
-            .card { border: none !important; box-shadow: none !important; }
-        }
-        .slip-box {
-            max-width: 450px;
-            margin: auto;
-            border: 1px solid #333;
-            padding: 15px;
-            border-radius: 6px;
-        }
-    </style>
+    <!-- File Style CSS Eksternal -->
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
@@ -435,757 +413,807 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 
-    <script>
-        // 1. INISIALISASI FIREBASE (Proyek billiard-21)
-        const firebaseConfig = {
-            databaseURL: "https://billiard-21-default-rtdb.asia-southeast1.firebasedatabase.app"
-        };
-        
-        if (!firebase.apps.length) {
-            firebase.initializeApp(firebaseConfig);
-        }
-        const db = firebase.database();
-
-        const refUsers = db.ref('absensi_karyawan/users');
-        const refGaji = db.ref('absensi_karyawan/setting_gaji');
-        const refAbsen = db.ref('absensi_karyawan/riwayat_absen');
-        const refKasbon = db.ref('absensi_karyawan/riwayat_kasbon');
-
-        let currentUser = null;
-        let currentRole = null;
-        let selectedKaryawan = null; 
-        let selectedPeriodeOffset = 0; // 0 = Bulan Ini, -1 = Bulan Lalu, -2 = 2 Bulan Lalu
-        
-        let localUsers = {};
-        let localGaji = {};
-        let localAbsen = {};
-        let localKasbon = {};
-
-        const optionsDate = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-        document.getElementById('currentDate').innerText = new Date().toLocaleDateString('id-ID', optionsDate);
-
-        // 2. REALTIME LISTENERS FIREBASE
-        function initRealtimeListeners() {
-            refUsers.on('value', snapshot => {
-                localUsers = snapshot.val() || {};
-                if (!localUsers['admin']) {
-                    refUsers.child('admin').set({ pin: '1234', role: 'admin', nama: 'Admin' });
-                }
-                renderLoginDropdown();
-                renderTabelUserModal();
-            });
-
-            refGaji.on('value', snapshot => {
-                localGaji = snapshot.val() || {};
-                updateUI();
-            });
-
-            refAbsen.on('value', snapshot => {
-                localAbsen = snapshot.val() || {};
-                updateUI();
-            });
-
-            refKasbon.on('value', snapshot => {
-                localKasbon = snapshot.val() || {};
-                updateUI();
-            });
-        }
-
-        initRealtimeListeners();
-
-        // 3. LOGIKA AUTHENTICATION
-        function renderLoginDropdown() {
-            const select = document.getElementById('loginUser');
-            select.innerHTML = '';
-            Object.keys(localUsers).forEach(key => {
-                const u = localUsers[key];
-                const opt = document.createElement('option');
-                opt.value = key;
-                opt.innerText = `${u.nama} (${u.role.toUpperCase()})`;
-                select.appendChild(opt);
-            });
-        }
-
-        function prosesLogin(e) {
-            e.preventDefault();
-            const keyUser = document.getElementById('loginUser').value;
-            const inputPin = document.getElementById('loginPin').value;
-
-            const u = localUsers[keyUser];
-            if (u && u.pin === inputPin) {
-                currentUser = u.nama;
-                currentRole = u.role;
-                selectedPeriodeOffset = 0;
-                
-                const nonAdminKey = Object.keys(localUsers).find(k => localUsers[k].role !== 'admin');
-                selectedKaryawan = (currentRole === 'admin') ? (nonAdminKey ? localUsers[nonAdminKey].nama : 'Aris') : currentUser;
-
-                document.getElementById('loginSection').style.display = 'none';
-                document.getElementById('appSection').style.display = 'block';
-
-                document.getElementById('sessionNama').innerText = currentUser;
-                document.getElementById('sessionBadge').innerText = currentRole.toUpperCase();
-                document.getElementById('sessionBadge').className = `badge ${currentRole === 'admin' ? 'bg-danger' : 'bg-primary'} badge-compact`;
-
-                if (currentRole === 'admin') {
-                    document.getElementById('btnKelolaAkun').style.display = 'inline-block';
-                    document.getElementById('btnSettingGaji').style.display = 'inline-block';
-                    document.getElementById('adminFilterPanel').style.display = 'block';
-                    document.getElementById('adminSusulanPanel').style.display = 'block';
-                    document.getElementById('thAksiAdmin').style.display = 'table-cell';
-                } else {
-                    document.getElementById('btnKelolaAkun').style.display = 'none';
-                    document.getElementById('btnSettingGaji').style.display = 'none';
-                    document.getElementById('adminFilterPanel').style.display = 'none';
-                    document.getElementById('adminSusulanPanel').style.display = 'none';
-                    document.getElementById('thAksiAdmin').style.display = 'none';
-                }
-
-                renderDropdownAdminFilter();
-                updateUI();
-                document.getElementById('loginPin').value = '';
-            } else {
-                alert('PIN Salah!');
-            }
-        }
-
-        function logout() {
-            currentUser = null;
-            currentRole = null;
-            document.getElementById('loginSection').style.display = 'block';
-            document.getElementById('appSection').style.display = 'none';
-        }
-
-        function renderDropdownAdminFilter() {
-            const select = document.getElementById('selectKaryawanAdmin');
-            select.innerHTML = '';
-            Object.keys(localUsers).forEach(key => {
-                const u = localUsers[key];
-                if (u.role !== 'admin') {
-                    const opt = document.createElement('option');
-                    opt.value = u.nama;
-                    opt.innerText = u.nama;
-                    if (u.nama === selectedKaryawan) opt.selected = true;
-                    select.appendChild(opt);
-                }
-            });
-        }
-
-        function gantiKaryawanAdmin() {
-            selectedKaryawan = document.getElementById('selectKaryawanAdmin').value;
-            selectedPeriodeOffset = 0;
-            updateUI();
-        }
-
-        // 4. HELPER GAJI & HITUNG PERIODE DINAMIS
-        function getSettingGaji(nama) {
-            return localGaji[nama] || {
-                tipe: 'Harian',
-                nominal: 50000,
-                lembur: 50000,
-                potongan: 50000,
-                siklusTanggal: 19
-            };
-        }
-
-        function getRentangPeriode(cutoffDay, offsetMonths = 0) {
-            const now = new Date();
-            let year = now.getFullYear();
-            let month = now.getMonth() + offsetMonths;
-
-            let startPeriod, endPeriod;
-            if (now.getDate() >= cutoffDay) {
-                startPeriod = new Date(year, month, cutoffDay, 0, 0, 0);
-                endPeriod = new Date(year, month + 1, cutoffDay - 1, 23, 59, 59);
-            } else {
-                startPeriod = new Date(year, month - 1, cutoffDay, 0, 0, 0);
-                endPeriod = new Date(year, month, cutoffDay - 1, 23, 59, 59);
-            }
-            return { startPeriod, endPeriod };
-        }
-
-        function gantiPeriodeOffset(val) {
-            selectedPeriodeOffset = parseInt(val);
-            updateUI();
-        }
-
-        // 5. UPDATE UI (KUNCI NOMINAL GAJI TERSIMPAN DI RIWAYAT & FILTER KASBON STRICT SIKLUS)
-        function updateUI() {
-            if (!currentUser) return;
-            const targetNama = (currentRole === 'admin') ? selectedKaryawan : currentUser;
-            document.querySelectorAll('.id-nama-karyawan').forEach(el => el.innerText = targetNama || '-');
-
-            const cfg = getSettingGaji(targetNama);
-            const cutoffDay = parseInt(cfg.siklusTanggal) || 19;
-
-            const { startPeriod, endPeriod } = getRentangPeriode(cutoffDay, selectedPeriodeOffset);
-
-            const fmtStart = startPeriod.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
-            const fmtEnd = endPeriod.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
-            
-            document.getElementById('labelSiklusGaji').innerHTML = `
-                <select onchange="gantiPeriodeOffset(this.value)" class="form-select form-select-sm fw-bold border-primary" style="font-size:0.8rem;">
-                    <option value="0" ${selectedPeriodeOffset === 0 ? 'selected' : ''}>Bulan Ini (${fmtStart} - ${fmtEnd})</option>
-                    <option value="-1" ${selectedPeriodeOffset === -1 ? 'selected' : ''}>Bulan Lalu (Siklus Sebelumnya)</option>
-                    <option value="-2" ${selectedPeriodeOffset === -2 ? 'selected' : ''}>2 Bulan Lalu</option>
-                </select>
-            `;
-
-            const rawAbsenData = localAbsen[targetNama] || {};
-            const rawKasbonData = localKasbon[targetNama] || {};
-
-            // Format tanggal string murni YYYY-MM-DD
-            const strStart = startPeriod.toISOString().slice(0, 10);
-            const strEnd = endPeriod.toISOString().slice(0, 10);
-
-            // Processing Absensi
-            let listAbsenPeriod = [];
-            Object.keys(rawAbsenData).forEach(k => {
-                let item = rawAbsenData[k];
-                item._key = k;
-                let strTgl = (item.rawDate || '').slice(0, 10);
-                if (strTgl >= strStart && strTgl <= strEnd) {
-                    listAbsenPeriod.push(item);
-                }
-            });
-
-            // Processing Kasbon (STRICT FILTER HARUS SESUAI RENTANG SIKLUS PERIODE TERPILIH)
-            let listKasbonPeriod = [];
-            Object.keys(rawKasbonData).forEach(k => {
-                let item = rawKasbonData[k];
-                item._key = k;
-                let strTgl = (item.rawDate || item.tanggal || '').slice(0, 10);
-                
-                if (strTgl >= strStart && strTgl <= strEnd) {
-                    listKasbonPeriod.push(item);
-                }
-            });
-
-            // Perhitungan Stat
-            let totalHadir = listAbsenPeriod.filter(x => x.status === 'Hadir' || x.status === 'Lembur').length;
-            let totalAbsen = listAbsenPeriod.filter(x => x.status === 'Tidak Masuk').length;
-            let totalLemburCount = listAbsenPeriod.filter(x => x.lembur === true).length;
-
-            let totalPotonganKurangJam = 0;
-            let totalGajiAbsen = 0;
-
-            listAbsenPeriod.forEach(item => {
-                let rateNominal = (item.savedNominal !== undefined) ? item.savedNominal : cfg.nominal;
-                let ratePotongan = (item.savedPotongan !== undefined) ? item.savedPotongan : cfg.potongan;
-                let ratePerJam = (cfg.tipe === 'Harian' ? rateNominal : ratePotongan) / 8;
-
-                if (cfg.tipe === 'Harian' && item.status !== 'Tidak Masuk') {
-                    totalGajiAbsen += rateNominal;
-                }
-
-                if (item.jamMasuk && item.jamPulang && item.status !== 'Tidak Masuk') {
-                    let [h1, m1] = item.jamMasuk.split(':').map(Number);
-                    let [h2, m2] = item.jamPulang.split(':').map(Number);
-                    let durasiJam = (h2 + m2/60) - (h1 + m1/60);
-                    if (durasiJam > 0 && durasiJam < 8) {
-                        let kurangJam = 8 - durasiJam;
-                        totalPotonganKurangJam += (kurangJam * ratePerJam);
-                    }
-                }
-            });
-
-            if (cfg.tipe === 'Bulanan') {
-                totalGajiAbsen = cfg.nominal;
-            }
-
-            let totalGajiLembur = totalLemburCount * cfg.lembur;
-            let totalKotor = totalGajiAbsen + totalGajiLembur;
-
-            let totalPotonganAbsen = totalAbsen * cfg.potongan;
-            let totalKasbonRp = listKasbonPeriod.reduce((acc, curr) => acc + (parseInt(curr.jumlah) || 0), 0);
-            let totalPotongan = totalPotonganAbsen + totalKasbonRp + totalPotonganKurangJam;
-
-            let gajiBersih = totalKotor - totalPotongan;
-
-            document.getElementById('totalHadir').innerText = `${totalHadir} Hari`;
-            document.getElementById('totalAbsen').innerText = `${totalAbsen} Hari`;
-            document.getElementById('totalLembur').innerText = `${totalLemburCount} Kali`;
-            document.getElementById('totalGaji').innerText = `Rp ${Math.round(totalKotor).toLocaleString('id-ID')}`;
-            document.getElementById('totalKasbon').innerText = `Rp ${Math.round(totalPotongan).toLocaleString('id-ID')}`;
-            document.getElementById('gajiBersih').innerText = `Rp ${Math.round(gajiBersih).toLocaleString('id-ID')}`;
-
-            const todayFormatted = new Date().toISOString().slice(0, 10);
-            const absenHariIniKey = Object.keys(rawAbsenData).find(k => rawAbsenData[k].rawDate === todayFormatted);
-            const absenHariIni = absenHariIniKey ? rawAbsenData[absenHariIniKey] : null;
-
-            const btnMasuk = document.getElementById('btnAbsenMasuk');
-            const btnPulang = document.getElementById('btnAbsenPulang');
-            const btnLembur = document.getElementById('btnLembur');
-            const btnTdkMasuk = document.getElementById('btnTidakMasuk');
-            const badgeHariIni = document.getElementById('statusHariIniBadge');
-
-            if (absenHariIni) {
-                btnMasuk.disabled = true;
-                btnTdkMasuk.disabled = true;
-                
-                if (absenHariIni.status === 'Tidak Masuk') {
-                    btnPulang.disabled = true;
-                    btnLembur.disabled = true;
-                    badgeHariIni.innerText = 'Tidak Masuk';
-                    badgeHariIni.className = 'badge bg-danger badge-compact';
-                } else {
-                    btnPulang.disabled = !!absenHariIni.jamPulang;
-                    btnLembur.disabled = !!absenHariIni.lembur;
-                    badgeHariIni.innerText = absenHariIni.jamPulang ? 'Sudah Pulang' : 'Sudah Masuk';
-                    badgeHariIni.className = 'badge bg-success badge-compact';
-                }
-            } else {
-                btnMasuk.disabled = false;
-                btnTdkMasuk.disabled = false;
-                btnPulang.disabled = true;
-                btnLembur.disabled = true;
-                badgeHariIni.innerText = 'Belum Absen';
-                badgeHariIni.className = 'badge bg-secondary badge-compact';
-            }
-
-            const tabelRiwayat = document.getElementById('tabelRiwayat');
-            tabelRiwayat.innerHTML = '';
-            if (listAbsenPeriod.length === 0) {
-                tabelRiwayat.innerHTML = `<tr><td colspan="7" class="text-center text-muted py-2">Belum ada riwayat pada periode terpilih.</td></tr>`;
-            } else {
-                listAbsenPeriod.sort((a, b) => new Date(b.rawDate) - new Date(a.rawDate));
-                listAbsenPeriod.forEach(item => {
-                    let durasiStr = '-';
-                    let potonganJamRp = 0;
-                    let rateNominal = (item.savedNominal !== undefined) ? item.savedNominal : cfg.nominal;
-                    let ratePotongan = (item.savedPotongan !== undefined) ? item.savedPotongan : cfg.potongan;
-                    let ratePerJam = (cfg.tipe === 'Harian' ? rateNominal : ratePotongan) / 8;
-
-                    if (item.jamMasuk && item.jamPulang && item.status !== 'Tidak Masuk') {
-                        let [h1, m1] = item.jamMasuk.split(':').map(Number);
-                        let [h2, m2] = item.jamPulang.split(':').map(Number);
-                        let durasiJam = (h2 + m2/60) - (h1 + m1/60);
-                        if (durasiJam > 0) {
-                            let hrs = Math.floor(durasiJam);
-                            let mins = Math.round((durasiJam - hrs) * 60);
-                            durasiStr = `${hrs}j ${mins}m`;
-                            if (durasiJam < 8) {
-                                potonganJamRp = (8 - durasiJam) * ratePerJam;
-                            }
-                        }
-                    }
-
-                    let statusBadge = item.status === 'Tidak Masuk'
-                        ? `<span class="badge bg-danger">Tidak Masuk</span>`
-                        : `<span class="badge bg-success">Hadir</span>`;
-
-                    if (item.lembur) statusBadge += ` <span class="badge" style="background:#6f42c1;">Lembur</span>`;
-
-                    let pendapatanHari = (cfg.tipe === 'Harian' && item.status !== 'Tidak Masuk') ? (rateNominal - potonganJamRp + (item.lembur ? cfg.lembur : 0)) : (item.lembur ? cfg.lembur : 0);
-
-                    let aksiAdminTd = (currentRole === 'admin') 
-                        ? `<td class="text-center"><button onclick="hapusAbsenItem('${item._key}')" class="btn btn-xs btn-outline-danger"><i class="fa-solid fa-trash"></i></button></td>` : '';
-
-                    tabelRiwayat.innerHTML += `
-                        <tr>
-                            <td>${item.rawDate}</td>
-                            <td>${item.jamMasuk || '-'} s/d ${item.jamPulang || '-'}</td>
-                            <td>${durasiStr} ${potonganJamRp > 0 ? `<span class="text-danger small">(-Rp${Math.round(potonganJamRp).toLocaleString('id-ID')})</span>` : ''}</td>
-                            <td>${statusBadge}</td>
-                            <td class="fst-italic text-muted">${item.catatan || '-'}</td>
-                            <td>Rp ${Math.round(pendapatanHari).toLocaleString('id-ID')}</td>
-                            ${aksiAdminTd}
-                        </tr>
-                    `;
-                });
-            }
-
-            const tabelKasbon = document.getElementById('tabelKasbon');
-            tabelKasbon.innerHTML = '';
-            if (listKasbonPeriod.length === 0) {
-                tabelKasbon.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-2">Belum ada riwayat kasbon periode ini.</td></tr>`;
-            } else {
-                listKasbonPeriod.sort((a, b) => new Date(b.rawDate || b.tanggal) - new Date(a.rawDate || a.tanggal));
-                listKasbonPeriod.forEach((item, idx) => {
-                    tabelKasbon.innerHTML += `
-                        <tr>
-                            <td>${idx + 1}</td>
-                            <td>${item.tanggal || item.rawDate}</td>
-                            <td>${item.keterangan || '-'}</td>
-                            <td class="text-danger fw-bold">- Rp ${(parseInt(item.jumlah) || 0).toLocaleString('id-ID')}</td>
-                            <td class="text-center">
-                                <button onclick="hapusKasbonItem('${item._key}')" class="btn btn-xs btn-outline-danger"><i class="fa-solid fa-trash"></i></button>
-                            </td>
-                        </tr>
-                    `;
-                });
-            }
-        }
-
-        // 6. ACTION ABSENSI (KUNCI RATE GAJI SAAT INI KE FIREBASE)
-        function lakukanAbsenMasuk() {
-            const targetNama = (currentRole === 'admin') ? selectedKaryawan : currentUser;
-            const cfg = getSettingGaji(targetNama);
-            const jamManual = document.getElementById('inputJamManual').value;
-            const catatan = document.getElementById('inputCatatanAbsen').value.trim();
-
-            const sekarang = new Date();
-            const rawDate = sekarang.toISOString().slice(0, 10);
-            const jamMasukStr = jamManual || sekarang.toTimeString().slice(0, 5);
-
-            const newAbsen = {
-                rawDate: rawDate,
-                jamMasuk: jamMasukStr,
-                jamPulang: '',
-                status: 'Hadir',
-                lembur: false,
-                catatan: catatan,
-                savedNominal: cfg.nominal || 50000,
-                savedPotongan: cfg.potongan || 50000
-            };
-
-            refAbsen.child(targetNama).push(newAbsen);
-            document.getElementById('inputJamManual').value = '';
-            document.getElementById('inputCatatanAbsen').value = '';
-            alert('Absen Masuk Berhasil!');
-        }
-
-        function lakukanAbsenPulang() {
-            const targetNama = (currentRole === 'admin') ? selectedKaryawan : currentUser;
-            const jamManual = document.getElementById('inputJamManual').value;
-            const todayFormatted = new Date().toISOString().slice(0, 10);
-
-            const rawAbsenData = localAbsen[targetNama] || {};
-            const keyHariIni = Object.keys(rawAbsenData).find(k => rawAbsenData[k].rawDate === todayFormatted);
-
-            if (keyHariIni) {
-                const sekarang = new Date();
-                const jamPulangStr = jamManual || sekarang.toTimeString().slice(0, 5);
-                refAbsen.child(targetNama).child(keyHariIni).update({ jamPulang: jamPulangStr });
-                document.getElementById('inputJamManual').value = '';
-                alert('Absen Pulang Berhasil!');
-            }
-        }
-
-        function lakukanLembur() {
-            const targetNama = (currentRole === 'admin') ? selectedKaryawan : currentUser;
-            const todayFormatted = new Date().toISOString().slice(0, 10);
-            const rawAbsenData = localAbsen[targetNama] || {};
-            const keyHariIni = Object.keys(rawAbsenData).find(k => rawAbsenData[k].rawDate === todayFormatted);
-
-            if (keyHariIni) {
-                refAbsen.child(targetNama).child(keyHariIni).update({ lembur: true });
-                alert('Catat Lembur Berhasil!');
-            }
-        }
-
-        function lakukanTidakMasuk() {
-            const targetNama = (currentRole === 'admin') ? selectedKaryawan : currentUser;
-            const cfg = getSettingGaji(targetNama);
-            const catatan = document.getElementById('inputCatatanAbsen').value.trim() || 'Izin/Tidak Masuk';
-            const sekarang = new Date();
-            const rawDate = sekarang.toISOString().slice(0, 10);
-
-            const newAbsen = {
-                rawDate: rawDate,
-                jamMasuk: '',
-                jamPulang: '',
-                status: 'Tidak Masuk',
-                lembur: false,
-                catatan: catatan,
-                savedNominal: cfg.nominal || 50000,
-                savedPotongan: cfg.potongan || 50000
-            };
-
-            refAbsen.child(targetNama).push(newAbsen);
-            document.getElementById('inputCatatanAbsen').value = '';
-            alert('Status Tidak Masuk Dicatat!');
-        }
-
-        function simpanAbsenSusulanAdmin() {
-            if (currentRole !== 'admin') return alert('Hanya Admin yang bisa menginput susulan!');
-
-            let targetNama = selectedKaryawan;
-            if (!targetNama) {
-                const select = document.getElementById('selectKaryawanAdmin');
-                if (select && select.value) {
-                    targetNama = select.value;
-                    selectedKaryawan = targetNama;
-                } else {
-                    return alert('Pilih nama karyawan terlebih dahulu!');
-                }
-            }
-
-            const cfg = getSettingGaji(targetNama);
-            const tgl = document.getElementById('susulanTanggal').value;
-            const jamM = document.getElementById('susulanJamMasuk').value;
-            const jamP = document.getElementById('susulanJamPulang').value;
-            const st = document.getElementById('susulanStatus').value;
-
-            if (!tgl) return alert('Pilih tanggal susulan!');
-
-            const newAbsen = {
-                rawDate: tgl,
-                jamMasuk: (st !== 'Tidak Masuk') ? (jamM || '08:00') : '',
-                jamPulang: (st !== 'Tidak Masuk') ? (jamP || '16:00') : '',
-                status: (st === 'Tidak Masuk') ? 'Tidak Masuk' : 'Hadir',
-                lembur: (st === 'Lembur'),
-                catatan: '',
-                savedNominal: cfg.nominal || 50000,
-                savedPotongan: cfg.potongan || 50000
-            };
-
-            refAbsen.child(targetNama).push(newAbsen)
-                .then(() => {
-                    alert(`Absen susulan untuk ${targetNama} tanggal ${tgl} disimpan!`);
-                    document.getElementById('susulanTanggal').value = '';
-                    updateUI();
-                })
-                .catch(err => {
-                    alert('Gagal simpan: ' + err.message);
-                });
-        }
-
-        function hapusAbsenItem(key) {
-            if (confirm('Hapus item absensi ini?')) {
-                const targetNama = (currentRole === 'admin') ? selectedKaryawan : currentUser;
-                refAbsen.child(targetNama).child(key).remove();
-            }
-        }
-
-        // 7. ACTION KASBON (STRING PARSING PASTI PRESISI SIKLUS)
-        function tambahKasbon() {
-            const targetNama = (currentRole === 'admin') ? selectedKaryawan : currentUser;
-            const tglManual = document.getElementById('inputTanggalKasbon').value;
-            const jumlah = parseInt(document.getElementById('inputJumlahKasbon').value);
-            const ket = document.getElementById('inputKetKasbon').value.trim();
-
-            if (!jumlah || jumlah <= 0) return alert('Masukkan nominal kasbon yang valid!');
-
-            const skrg = new Date();
-            const rawDate = tglManual || skrg.toISOString().slice(0, 10);
-            
-            const parts = rawDate.split('-');
-            let tanggalStr = rawDate;
-            if (parts.length === 3) {
-                const d = new Date(parts[0], parts[1] - 1, parts[2]);
-                tanggalStr = d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
-            }
-
-            refKasbon.child(targetNama).push({
-                rawDate: rawDate,
-                tanggal: tanggalStr,
-                jumlah: jumlah,
-                keterangan: ket || 'Kasbon'
-            }).then(() => {
-                document.getElementById('inputTanggalKasbon').value = '';
-                document.getElementById('inputJumlahKasbon').value = '';
-                document.getElementById('inputKetKasbon').value = '';
-                alert(`Kasbon Rp ${jumlah.toLocaleString('id-ID')} tanggal ${tanggalStr} berhasil disimpan!`);
-                updateUI();
-            }).catch(err => {
-                alert('Gagal menyimpan kasbon: ' + err.message);
-            });
-        }
-
-        function hapusKasbonItem(key) {
-            if (confirm('Hapus item kasbon ini?')) {
-                const targetNama = (currentRole === 'admin') ? selectedKaryawan : currentUser;
-                refKasbon.child(targetNama).child(key).remove();
-            }
-        }
-
-        // 8. MODAL ACTIONS
-        let bsModalGaji, bsModalAkun;
-
-        function bukaModalGaji() {
-            if (currentRole !== 'admin') return;
-            const cfg = getSettingGaji(selectedKaryawan);
-            document.getElementById('modalNamaKaryawan').innerText = selectedKaryawan;
-            document.getElementById('setTipeGaji').value = cfg.tipe || 'Harian';
-            document.getElementById('setNominalGaji').value = cfg.nominal || 50000;
-            document.getElementById('setTarifLembur').value = cfg.lembur || 50000;
-            document.getElementById('setPotonganAbsen').value = cfg.potongan || 50000;
-            document.getElementById('setTanggalSiklus').value = cfg.siklusTanggal || 19;
-
-            toggleFormGaji();
-            bsModalGaji = new bootstrap.Modal(document.getElementById('modalGaji'));
-            bsModalGaji.show();
-        }
-
-        function toggleFormGaji() {
-            let tipe = document.getElementById('setTipeGaji').value;
-            document.getElementById('lblNominalGaji').innerText = (tipe === 'Bulanan') ? 'Gaji Pokok Bulanan (Rp)' : 'Nominal Gaji Harian (Rp)';
-        }
-
-        function simpanSettingGaji() {
-            if (currentRole !== 'admin') return;
-            const dataConfig = {
-                tipe: document.getElementById('setTipeGaji').value,
-                nominal: parseInt(document.getElementById('setNominalGaji').value) || 0,
-                lembur: parseInt(document.getElementById('setTarifLembur').value) || 0,
-                potongan: parseInt(document.getElementById('setPotonganAbsen').value) || 0,
-                siklusTanggal: parseInt(document.getElementById('setTanggalSiklus').value) || 19
-            };
-
-            refGaji.child(selectedKaryawan).set(dataConfig);
-            bsModalGaji.hide();
-            alert(`Setting Gaji & Cut-off Tanggal ${dataConfig.siklusTanggal} untuk ${selectedKaryawan} Tersimpan!`);
-        }
-
-        function bukaModalAkun() {
-            if (currentRole !== 'admin') return;
-            renderTabelUserModal();
-            bsModalAkun = new bootstrap.Modal(document.getElementById('modalAkun'));
-            bsModalAkun.show();
-        }
-
-        function renderTabelUserModal() {
-            const tbody = document.getElementById('tabelListUser');
-            if (!tbody) return;
-            tbody.innerHTML = '';
-            Object.keys(localUsers).forEach(key => {
-                const u = localUsers[key];
-                tbody.innerHTML += `
-                    <tr>
-                        <td>${u.nama}</td>
-                        <td><span class="badge ${u.role === 'admin' ? 'bg-danger' : 'bg-primary'}">${u.role}</span></td>
-                        <td>
-                            <input type="password" value="${u.pin}" class="form-control form-control-sm text-center fw-bold" style="width:70px;" onchange="updatePinUser('${key}', this.value)">
-                        </td>
-                        <td class="text-center">
-                            ${u.role !== 'admin' ? `<button onclick="hapusUser('${key}')" class="btn btn-xs btn-outline-danger"><i class="fa-solid fa-trash"></i></button>` : '-'}
-                        </td>
-                    </tr>
-                `;
-            });
-        }
-
-        function tambahUserBaru() {
-            const nama = document.getElementById('inputNamaUserBaru').value.trim();
-            const pin = document.getElementById('inputPinUserBaru').value.trim();
-            if (!nama || !pin) return alert('Lengkapi Nama dan PIN!');
-
-            const key = nama.toLowerCase().replace(/\s+/g, '_');
-            refUsers.child(key).set({
-                nama: nama,
-                pin: pin,
-                role: 'karyawan'
-            });
-
-            document.getElementById('inputNamaUserBaru').value = '';
-            document.getElementById('inputPinUserBaru').value = '';
-            alert('Karyawan Berhasil Ditambahkan!');
-        }
-
-        function updatePinUser(key, pinBaru) {
-            if (pinBaru.length >= 4) {
-                refUsers.child(key).update({ pin: pinBaru });
-                alert('PIN Diperbarui!');
-            }
-        }
-
-        function hapusUser(key) {
-            if (confirm('Hapus user karyawan ini?')) {
-                refUsers.child(key).remove();
-            }
-        }
-
-        // 9. CETAK SLIP GAJI PDF PERIODE TERPILIH (R21 POOL & CAFE COMPACT)
-        function cetakPDF() {
-            const targetNama = (currentRole === 'admin') ? selectedKaryawan : currentUser;
-            const cfg = getSettingGaji(targetNama);
-            const cutoffDay = parseInt(cfg.siklusTanggal) || 19;
-
-            const { startPeriod, endPeriod } = getRentangPeriode(cutoffDay, selectedPeriodeOffset);
-
-            const rawAbsenData = localAbsen[targetNama] || {};
-            const rawKasbonData = localKasbon[targetNama] || {};
-
-            const strStart = startPeriod.toISOString().slice(0, 10);
-            const strEnd = endPeriod.toISOString().slice(0, 10);
-
-            let listAbsen = [];
-            Object.keys(rawAbsenData).forEach(k => {
-                let item = rawAbsenData[k];
-                let strTgl = (item.rawDate || '').slice(0, 10);
-                if (strTgl >= strStart && strTgl <= strEnd) listAbsen.push(item);
-            });
-
-            let listKasbon = [];
-            Object.keys(rawKasbonData).forEach(k => {
-                let item = rawKasbonData[k];
-                let strTgl = (item.rawDate || item.tanggal || '').slice(0, 10);
-                if (strTgl >= strStart && strTgl <= strEnd) listKasbon.push(item);
-            });
-
-            let totalHadir = listAbsen.filter(x => x.status === 'Hadir' || x.status === 'Lembur').length;
-            let totalAbsen = listAbsen.filter(x => x.status === 'Tidak Masuk').length;
-            let totalLemburCount = listAbsen.filter(x => x.lembur === true).length;
-
-            let totalPotonganKurangJam = 0;
-            let nominalGajiPokok = 0;
-
-            listAbsen.forEach(item => {
-                let rateNominal = (item.savedNominal !== undefined) ? item.savedNominal : cfg.nominal;
-                let ratePotongan = (item.savedPotongan !== undefined) ? item.savedPotongan : cfg.potongan;
-                let ratePerJam = (cfg.tipe === 'Harian' ? rateNominal : ratePotongan) / 8;
-
-                if (cfg.tipe === 'Harian' && item.status !== 'Tidak Masuk') {
-                    nominalGajiPokok += rateNominal;
-                }
-
-                if (item.jamMasuk && item.jamPulang && item.status !== 'Tidak Masuk') {
-                    let [h1, m1] = item.jamMasuk.split(':').map(Number);
-                    let [h2, m2] = item.jamPulang.split(':').map(Number);
-                    let durasiJam = (h2 + m2/60) - (h1 + m1/60);
-                    if (durasiJam > 0 && durasiJam < 8) {
-                        totalPotonganKurangJam += ((8 - durasiJam) * ratePerJam);
-                    }
-                }
-            });
-
-            if (cfg.tipe === 'Bulanan') {
-                nominalGajiPokok = cfg.nominal;
-            }
-
-            let totalLemburRp = totalLemburCount * cfg.lembur;
-            let totalKotor = nominalGajiPokok + totalLemburRp;
-
-            let totalPotonganAbsen = totalAbsen * cfg.potongan;
-            let totalKasbonRp = listKasbon.reduce((acc, curr) => acc + (parseInt(curr.jumlah) || 0), 0);
-            let totalPotongan = totalPotonganAbsen + totalKasbonRp + totalPotonganKurangJam;
-
-            let gajiBersih = totalKotor - totalPotongan;
-
-            const now = new Date();
-            document.getElementById('printNamaSimple').innerText = targetNama;
-            document.getElementById('printNamaTtd').innerText = targetNama;
-            document.getElementById('printTanggalCetak').innerText = now.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
-            document.getElementById('printPeriodeGaji').innerText = `${startPeriod.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })} s/d ${endPeriod.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}`;
-
-            if (cfg.tipe === 'Bulanan') {
-                document.getElementById('printGajiPokokRow').innerText = `Gaji Pokok (Bulanan):`;
-            } else {
-                document.getElementById('printGajiPokokRow').innerText = `Gaji Pokok (${totalHadir} Hari x Rp ${(cfg.nominal).toLocaleString('id-ID')}):`;
-            }
-            document.getElementById('printGajiPokokVal').innerText = `Rp ${nominalGajiPokok.toLocaleString('id-ID')}`;
-
-            document.getElementById('printLemburRow').innerText = `Uang Lembur (${totalLemburCount} Hari x Rp ${(cfg.lembur).toLocaleString('id-ID')}):`;
-            document.getElementById('printLemburVal').innerText = `Rp ${totalLemburRp.toLocaleString('id-ID')}`;
-
-            document.getElementById('printTotalKotorSimple').innerText = `Rp ${Math.round(totalKotor).toLocaleString('id-ID')}`;
-
-            document.getElementById('printPotonganAbsenRow').innerText = `• Absen Tidak Masuk (${totalAbsen} Hari):`;
-            document.getElementById('printPotonganAbsenVal').innerText = `Rp ${totalPotonganAbsen.toLocaleString('id-ID')}`;
-
-            document.getElementById('printPotonganJamRow').innerText = `• Potongan Jam Kerja (<8 Jam):`;
-            document.getElementById('printPotonganJamVal').innerText = `Rp ${Math.round(totalPotonganKurangJam).toLocaleString('id-ID')}`;
-
-            // MENGISI ELEMEN ANGKA KASBON KE SLIP PDF
-            document.getElementById('printKasbonRow').innerText = `• Total Kasbon:`;
-            document.getElementById('printKasbonVal').innerText = `Rp ${totalKasbonRp.toLocaleString('id-ID')}`;
-
-            document.getElementById('printTotalPotonganSimple').innerText = `Rp ${Math.round(totalPotongan).toLocaleString('id-ID')}`;
-            document.getElementById('printGajiBersihSimple').innerText = `Rp ${Math.round(gajiBersih).toLocaleString('id-ID')}`;
-
-            window.print();
-        }
-    </script>
+    <!-- Script Logika Eksternal -->
+    <script src="app.js"></script>
 </body>
 </html>
+body { 
+    background-color: #f0f2f5; 
+    font-size: 0.88rem; 
+}
+
+.card { 
+    border-radius: 8px; 
+    margin-bottom: 0.75rem; 
+}
+
+.card-body, .card-header { 
+    padding: 0.6rem 0.8rem; 
+}
+
+.btn-sm { 
+    padding: 0.25rem 0.5rem; 
+    font-size: 0.8rem; 
+}
+
+.btn-xs { 
+    padding: 0.15rem 0.35rem; 
+    font-size: 0.75rem; 
+}
+
+.table-sm td, .table-sm th { 
+    padding: 0.35rem 0.5rem; 
+    font-size: 0.82rem; 
+}
+
+.badge-compact { 
+    font-size: 0.72rem; 
+    padding: 0.25em 0.5em; 
+}
+
+.stat-card { 
+    border-left: 3.5px solid #0d6efd; 
+    background: #fff; 
+}
+
+/* DESAIN SLIP GAJI PDF COMPACT R21 POOL & CAFE */
+@media print {
+    .no-print { 
+        display: none !important; 
+    }
+    body { 
+        background-color: #fff; 
+        color: #000; 
+        font-family: Arial, sans-serif; 
+    }
+    .card { 
+        border: none !important; 
+        box-shadow: none !important; 
+    }
+}
+
+.slip-box {
+    max-width: 450px;
+    margin: auto;
+    border: 1px solid #333;
+    padding: 15px;
+    border-radius: 6px;
+}
+// 1. INISIALISASI FIREBASE (Proyek billiard-21)
+const firebaseConfig = {
+    databaseURL: "https://billiard-21-default-rtdb.asia-southeast1.firebasedatabase.app"
+};
+
+if (!firebase.apps.length) {
+    firebase.initializeApp(firebaseConfig);
+}
+const db = firebase.database();
+
+const refUsers = db.ref('absensi_karyawan/users');
+const refGaji = db.ref('absensi_karyawan/setting_gaji');
+const refAbsen = db.ref('absensi_karyawan/riwayat_absen');
+const refKasbon = db.ref('absensi_karyawan/riwayat_kasbon');
+
+let currentUser = null;
+let currentRole = null;
+let selectedKaryawan = null; 
+let selectedPeriodeOffset = 0; // 0 = Bulan Ini, -1 = Bulan Lalu, -2 = 2 Bulan Lalu
+
+let localUsers = {};
+let localGaji = {};
+let localAbsen = {};
+let localKasbon = {};
+
+const optionsDate = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+document.getElementById('currentDate').innerText = new Date().toLocaleDateString('id-ID', optionsDate);
+
+// 2. REALTIME LISTENERS FIREBASE
+function initRealtimeListeners() {
+    refUsers.on('value', snapshot => {
+        localUsers = snapshot.val() || {};
+        if (!localUsers['admin']) {
+            refUsers.child('admin').set({ pin: '1234', role: 'admin', nama: 'Admin' });
+        }
+        renderLoginDropdown();
+        renderTabelUserModal();
+    });
+
+    refGaji.on('value', snapshot => {
+        localGaji = snapshot.val() || {};
+        updateUI();
+    });
+
+    refAbsen.on('value', snapshot => {
+        localAbsen = snapshot.val() || {};
+        updateUI();
+    });
+
+    refKasbon.on('value', snapshot => {
+        localKasbon = snapshot.val() || {};
+        updateUI();
+    });
+}
+
+initRealtimeListeners();
+
+// 3. LOGIKA AUTHENTICATION
+function renderLoginDropdown() {
+    const select = document.getElementById('loginUser');
+    select.innerHTML = '';
+    Object.keys(localUsers).forEach(key => {
+        const u = localUsers[key];
+        const opt = document.createElement('option');
+        opt.value = key;
+        opt.innerText = `${u.nama} (${u.role.toUpperCase()})`;
+        select.appendChild(opt);
+    });
+}
+
+function prosesLogin(e) {
+    e.preventDefault();
+    const keyUser = document.getElementById('loginUser').value;
+    const inputPin = document.getElementById('loginPin').value;
+
+    const u = localUsers[keyUser];
+    if (u && u.pin === inputPin) {
+        currentUser = u.nama;
+        currentRole = u.role;
+        selectedPeriodeOffset = 0;
+        
+        const nonAdminKey = Object.keys(localUsers).find(k => localUsers[k].role !== 'admin');
+        selectedKaryawan = (currentRole === 'admin') ? (nonAdminKey ? localUsers[nonAdminKey].nama : 'Aris') : currentUser;
+
+        document.getElementById('loginSection').style.display = 'none';
+        document.getElementById('appSection').style.display = 'block';
+
+        document.getElementById('sessionNama').innerText = currentUser;
+        document.getElementById('sessionBadge').innerText = currentRole.toUpperCase();
+        document.getElementById('sessionBadge').className = `badge ${currentRole === 'admin' ? 'bg-danger' : 'bg-primary'} badge-compact`;
+
+        if (currentRole === 'admin') {
+            document.getElementById('btnKelolaAkun').style.display = 'inline-block';
+            document.getElementById('btnSettingGaji').style.display = 'inline-block';
+            document.getElementById('adminFilterPanel').style.display = 'block';
+            document.getElementById('adminSusulanPanel').style.display = 'block';
+            document.getElementById('thAksiAdmin').style.display = 'table-cell';
+        } else {
+            document.getElementById('btnKelolaAkun').style.display = 'none';
+            document.getElementById('btnSettingGaji').style.display = 'none';
+            document.getElementById('adminFilterPanel').style.display = 'none';
+            document.getElementById('adminSusulanPanel').style.display = 'none';
+            document.getElementById('thAksiAdmin').style.display = 'none';
+        }
+
+        renderDropdownAdminFilter();
+        updateUI();
+        document.getElementById('loginPin').value = '';
+    } else {
+        alert('PIN Salah!');
+    }
+}
+
+function logout() {
+    currentUser = null;
+    currentRole = null;
+    document.getElementById('loginSection').style.display = 'block';
+    document.getElementById('appSection').style.display = 'none';
+}
+
+function renderDropdownAdminFilter() {
+    const select = document.getElementById('selectKaryawanAdmin');
+    select.innerHTML = '';
+    Object.keys(localUsers).forEach(key => {
+        const u = localUsers[key];
+        if (u.role !== 'admin') {
+            const opt = document.createElement('option');
+            opt.value = u.nama;
+            opt.innerText = u.nama;
+            if (u.nama === selectedKaryawan) opt.selected = true;
+            select.appendChild(opt);
+        }
+    });
+}
+
+function gantiKaryawanAdmin() {
+    selectedKaryawan = document.getElementById('selectKaryawanAdmin').value;
+    selectedPeriodeOffset = 0;
+    updateUI();
+}
+
+// 4. HELPER GAJI & HITUNG PERIODE DINAMIS
+function getSettingGaji(nama) {
+    return localGaji[nama] || {
+        tipe: 'Harian',
+        nominal: 50000,
+        lembur: 50000,
+        potongan: 50000,
+        siklusTanggal: 19
+    };
+}
+
+function getRentangPeriode(cutoffDay, offsetMonths = 0) {
+    const now = new Date();
+    let year = now.getFullYear();
+    let month = now.getMonth() + offsetMonths;
+
+    let startPeriod, endPeriod;
+    if (now.getDate() >= cutoffDay) {
+        startPeriod = new Date(year, month, cutoffDay, 0, 0, 0);
+        endPeriod = new Date(year, month + 1, cutoffDay - 1, 23, 59, 59);
+    } else {
+        startPeriod = new Date(year, month - 1, cutoffDay, 0, 0, 0);
+        endPeriod = new Date(year, month, cutoffDay - 1, 23, 59, 59);
+    }
+    return { startPeriod, endPeriod };
+}
+
+function gantiPeriodeOffset(val) {
+    selectedPeriodeOffset = parseInt(val);
+    updateUI();
+}
+
+// 5. UPDATE UI (GAJI BULANAN PRO-RATA HARI BERJALAN & KASBON STRICT SIKLUS)
+function updateUI() {
+    if (!currentUser) return;
+    const targetNama = (currentRole === 'admin') ? selectedKaryawan : currentUser;
+    document.querySelectorAll('.id-nama-karyawan').forEach(el => el.innerText = targetNama || '-');
+
+    const cfg = getSettingGaji(targetNama);
+    const cutoffDay = parseInt(cfg.siklusTanggal) || 19;
+
+    const { startPeriod, endPeriod } = getRentangPeriode(cutoffDay, selectedPeriodeOffset);
+
+    const fmtStart = startPeriod.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
+    const fmtEnd = endPeriod.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+    
+    document.getElementById('labelSiklusGaji').innerHTML = `
+        <select onchange="gantiPeriodeOffset(this.value)" class="form-select form-select-sm fw-bold border-primary" style="font-size:0.8rem;">
+            <option value="0" ${selectedPeriodeOffset === 0 ? 'selected' : ''}>Bulan Ini (${fmtStart} - ${fmtEnd})</option>
+            <option value="-1" ${selectedPeriodeOffset === -1 ? 'selected' : ''}>Bulan Lalu (Siklus Sebelumnya)</option>
+            <option value="-2" ${selectedPeriodeOffset === -2 ? 'selected' : ''}>2 Bulan Lalu</option>
+        </select>
+    `;
+
+    const rawAbsenData = localAbsen[targetNama] || {};
+    const rawKasbonData = localKasbon[targetNama] || {};
+
+    const strStart = startPeriod.toISOString().slice(0, 10);
+    const strEnd = endPeriod.toISOString().slice(0, 10);
+
+    // Processing Absensi
+    let listAbsenPeriod = [];
+    Object.keys(rawAbsenData).forEach(k => {
+        let item = rawAbsenData[k];
+        item._key = k;
+        let strTgl = (item.rawDate || '').slice(0, 10);
+        if (strTgl >= strStart && strTgl <= strEnd) {
+            listAbsenPeriod.push(item);
+        }
+    });
+
+    // Processing Kasbon (Strict Sesuai Periode)
+    let listKasbonPeriod = [];
+    Object.keys(rawKasbonData).forEach(k => {
+        let item = rawKasbonData[k];
+        item._key = k;
+        let strTgl = (item.rawDate || item.tanggal || '').slice(0, 10);
+        
+        if (strTgl >= strStart && strTgl <= strEnd) {
+            listKasbonPeriod.push(item);
+        }
+    });
+
+    // Hitung Kehadiran
+    let totalHadir = listAbsenPeriod.filter(x => x.status === 'Hadir' || x.status === 'Lembur').length;
+    let totalAbsen = listAbsenPeriod.filter(x => x.status === 'Tidak Masuk').length;
+    let totalLemburCount = listAbsenPeriod.filter(x => x.lembur === true).length;
+
+    // RUMUS GAJI BULANAN PRO-RATA (HARI BERJALAN)
+    let totalHariSiklusBerjalan = totalHadir + totalAbsen;
+    let tarifPerHari = (cfg.tipe === 'Bulanan') ? (cfg.nominal > 0 ? cfg.nominal / 30 : 40000) : cfg.nominal;
+
+    let totalPotonganKurangJam = 0;
+    let totalGajiAbsen = 0;
+
+    if (cfg.tipe === 'Bulanan') {
+        // Total Kotor = Total Hari Berjalan x Tarif Per Hari (misal 10 hari x 40rb = 400rb)
+        totalGajiAbsen = totalHariSiklusBerjalan * tarifPerHari;
+    } else {
+        // Tipe Harian (Hadir x Nominal Harian)
+        totalGajiAbsen = totalHadir * cfg.nominal;
+    }
+
+    listAbsenPeriod.forEach(item => {
+        if (item.jamMasuk && item.jamPulang && item.status !== 'Tidak Masuk') {
+            let [h1, m1] = item.jamMasuk.split(':').map(Number);
+            let [h2, m2] = item.jamPulang.split(':').map(Number);
+            let durasiJam = (h2 + m2/60) - (h1 + m1/60);
+            if (durasiJam > 0 && durasiJam < 8) {
+                let kurangJam = 8 - durasiJam;
+                totalPotonganKurangJam += (kurangJam * (tarifPerHari / 8));
+            }
+        }
+    });
+
+    let totalGajiLembur = totalLemburCount * cfg.lembur;
+    let totalKotor = totalGajiAbsen + totalGajiLembur;
+
+    // Potongan Absen = Total Tidak Masuk x Tarif Per Hari (misal 2 hari x 40rb = 80rb)
+    let tarifDendaPotongan = (cfg.potongan > 0) ? cfg.potongan : tarifPerHari;
+    let totalPotonganAbsen = totalAbsen * tarifDendaPotongan;
+
+    let totalKasbonRp = listKasbonPeriod.reduce((acc, curr) => acc + (parseInt(curr.jumlah) || 0), 0);
+    let totalPotongan = totalPotonganAbsen + totalKasbonRp + totalPotonganKurangJam;
+
+    let gajiBersih = totalKotor - totalPotongan;
+
+    document.getElementById('totalHadir').innerText = `${totalHadir} Hari`;
+    document.getElementById('totalAbsen').innerText = `${totalAbsen} Hari`;
+    document.getElementById('totalLembur').innerText = `${totalLemburCount} Kali`;
+    document.getElementById('totalGaji').innerText = `Rp ${Math.round(totalKotor).toLocaleString('id-ID')}`;
+    document.getElementById('totalKasbon').innerText = `Rp ${Math.round(totalPotongan).toLocaleString('id-ID')}`;
+    document.getElementById('gajiBersih').innerText = `Rp ${Math.round(gajiBersih).toLocaleString('id-ID')}`;
+
+    const todayFormatted = new Date().toISOString().slice(0, 10);
+    const absenHariIniKey = Object.keys(rawAbsenData).find(k => rawAbsenData[k].rawDate === todayFormatted);
+    const absenHariIni = absenHariIniKey ? rawAbsenData[absenHariIniKey] : null;
+
+    const btnMasuk = document.getElementById('btnAbsenMasuk');
+    const btnPulang = document.getElementById('btnAbsenPulang');
+    const btnLembur = document.getElementById('btnLembur');
+    const btnTdkMasuk = document.getElementById('btnTidakMasuk');
+    const badgeHariIni = document.getElementById('statusHariIniBadge');
+
+    if (absenHariIni) {
+        btnMasuk.disabled = true;
+        btnTdkMasuk.disabled = true;
+        
+        if (absenHariIni.status === 'Tidak Masuk') {
+            btnPulang.disabled = true;
+            btnLembur.disabled = true;
+            badgeHariIni.innerText = 'Tidak Masuk';
+            badgeHariIni.className = 'badge bg-danger badge-compact';
+        } else {
+            btnPulang.disabled = !!absenHariIni.jamPulang;
+            btnLembur.disabled = !!absenHariIni.lembur;
+            badgeHariIni.innerText = absenHariIni.jamPulang ? 'Sudah Pulang' : 'Sudah Masuk';
+            badgeHariIni.className = 'badge bg-success badge-compact';
+        }
+    } else {
+        btnMasuk.disabled = false;
+        btnTdkMasuk.disabled = false;
+        btnPulang.disabled = true;
+        btnLembur.disabled = true;
+        badgeHariIni.innerText = 'Belum Absen';
+        badgeHariIni.className = 'badge bg-secondary badge-compact';
+    }
+
+    const tabelRiwayat = document.getElementById('tabelRiwayat');
+    tabelRiwayat.innerHTML = '';
+    if (listAbsenPeriod.length === 0) {
+        tabelRiwayat.innerHTML = `<tr><td colspan="7" class="text-center text-muted py-2">Belum ada riwayat pada periode terpilih.</td></tr>`;
+    } else {
+        listAbsenPeriod.sort((a, b) => new Date(b.rawDate) - new Date(a.rawDate));
+        listAbsenPeriod.forEach(item => {
+            let durasiStr = '-';
+            let potonganJamRp = 0;
+
+            if (item.jamMasuk && item.jamPulang && item.status !== 'Tidak Masuk') {
+                let [h1, m1] = item.jamMasuk.split(':').map(Number);
+                let [h2, m2] = item.jamPulang.split(':').map(Number);
+                let durasiJam = (h2 + m2/60) - (h1 + m1/60);
+                if (durasiJam > 0) {
+                    let hrs = Math.floor(durasiJam);
+                    let mins = Math.round((durasiJam - hrs) * 60);
+                    durasiStr = `${hrs}j ${mins}m`;
+                    if (durasiJam < 8) {
+                        potonganJamRp = (8 - durasiJam) * (tarifPerHari / 8);
+                    }
+                }
+            }
+
+            let statusBadge = item.status === 'Tidak Masuk'
+                ? `<span class="badge bg-danger">Tidak Masuk</span>`
+                : `<span class="badge bg-success">Hadir</span>`;
+
+            if (item.lembur) statusBadge += ` <span class="badge" style="background:#6f42c1;">Lembur</span>`;
+
+            let pendapatanHari = (cfg.tipe === 'Harian' && item.status !== 'Tidak Masuk') ? (tarifPerHari - potonganJamRp + (item.lembur ? cfg.lembur : 0)) : (item.lembur ? cfg.lembur : 0);
+
+            let aksiAdminTd = (currentRole === 'admin') 
+                ? `<td class="text-center"><button onclick="hapusAbsenItem('${item._key}')" class="btn btn-xs btn-outline-danger"><i class="fa-solid fa-trash"></i></button></td>` : '';
+
+            tabelRiwayat.innerHTML += `
+                <tr>
+                    <td>${item.rawDate}</td>
+                    <td>${item.jamMasuk || '-'} s/d ${item.jamPulang || '-'}</td>
+                    <td>${durasiStr} ${potonganJamRp > 0 ? `<span class="text-danger small">(-Rp${Math.round(potonganJamRp).toLocaleString('id-ID')})</span>` : ''}</td>
+                    <td>${statusBadge}</td>
+                    <td class="fst-italic text-muted">${item.catatan || '-'}</td>
+                    <td>Rp ${Math.round(pendapatanHari).toLocaleString('id-ID')}</td>
+                    ${aksiAdminTd}
+                </tr>
+            `;
+        });
+    }
+
+    const tabelKasbon = document.getElementById('tabelKasbon');
+    tabelKasbon.innerHTML = '';
+    if (listKasbonPeriod.length === 0) {
+        tabelKasbon.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-2">Belum ada riwayat kasbon periode ini.</td></tr>`;
+    } else {
+        listKasbonPeriod.sort((a, b) => new Date(b.rawDate || b.tanggal) - new Date(a.rawDate || a.tanggal));
+        listKasbonPeriod.forEach((item, idx) => {
+            tabelKasbon.innerHTML += `
+                <tr>
+                    <td>${idx + 1}</td>
+                    <td>${item.tanggal || item.rawDate}</td>
+                    <td>${item.keterangan || '-'}</td>
+                    <td class="text-danger fw-bold">- Rp ${(parseInt(item.jumlah) || 0).toLocaleString('id-ID')}</td>
+                    <td class="text-center">
+                        <button onclick="hapusKasbonItem('${item._key}')" class="btn btn-xs btn-outline-danger"><i class="fa-solid fa-trash"></i></button>
+                    </td>
+                </tr>
+            `;
+        });
+    }
+}
+
+// 6. ACTION ABSENSI
+function lakukanAbsenMasuk() {
+    const targetNama = (currentRole === 'admin') ? selectedKaryawan : currentUser;
+    const jamManual = document.getElementById('inputJamManual').value;
+    const catatan = document.getElementById('inputCatatanAbsen').value.trim();
+
+    const sekarang = new Date();
+    const rawDate = sekarang.toISOString().slice(0, 10);
+    const jamMasukStr = jamManual || sekarang.toTimeString().slice(0, 5);
+
+    const newAbsen = {
+        rawDate: rawDate,
+        jamMasuk: jamMasukStr,
+        jamPulang: '',
+        status: 'Hadir',
+        lembur: false,
+        catatan: catatan
+    };
+
+    refAbsen.child(targetNama).push(newAbsen);
+    document.getElementById('inputJamManual').value = '';
+    document.getElementById('inputCatatanAbsen').value = '';
+    alert('Absen Masuk Berhasil!');
+}
+
+function lakukanAbsenPulang() {
+    const targetNama = (currentRole === 'admin') ? selectedKaryawan : currentUser;
+    const jamManual = document.getElementById('inputJamManual').value;
+    const todayFormatted = new Date().toISOString().slice(0, 10);
+
+    const rawAbsenData = localAbsen[targetNama] || {};
+    const keyHariIni = Object.keys(rawAbsenData).find(k => rawAbsenData[k].rawDate === todayFormatted);
+
+    if (keyHariIni) {
+        const sekarang = new Date();
+        const jamPulangStr = jamManual || sekarang.toTimeString().slice(0, 5);
+        refAbsen.child(targetNama).child(keyHariIni).update({ jamPulang: jamPulangStr });
+        document.getElementById('inputJamManual').value = '';
+        alert('Absen Pulang Berhasil!');
+    }
+}
+
+function lakukanLembur() {
+    const targetNama = (currentRole === 'admin') ? selectedKaryawan : currentUser;
+    const todayFormatted = new Date().toISOString().slice(0, 10);
+    const rawAbsenData = localAbsen[targetNama] || {};
+    const keyHariIni = Object.keys(rawAbsenData).find(k => rawAbsenData[k].rawDate === todayFormatted);
+
+    if (keyHariIni) {
+        refAbsen.child(targetNama).child(keyHariIni).update({ lembur: true });
+        alert('Catat Lembur Berhasil!');
+    }
+}
+
+function lakukanTidakMasuk() {
+    const targetNama = (currentRole === 'admin') ? selectedKaryawan : currentUser;
+    const catatan = document.getElementById('inputCatatanAbsen').value.trim() || 'Izin/Tidak Masuk';
+    const sekarang = new Date();
+    const rawDate = sekarang.toISOString().slice(0, 10);
+
+    const newAbsen = {
+        rawDate: rawDate,
+        jamMasuk: '',
+        jamPulang: '',
+        status: 'Tidak Masuk',
+        lembur: false,
+        catatan: catatan
+    };
+
+    refAbsen.child(targetNama).push(newAbsen);
+    document.getElementById('inputCatatanAbsen').value = '';
+    alert('Status Tidak Masuk Dicatat!');
+}
+
+function simpanAbsenSusulanAdmin() {
+    if (currentRole !== 'admin') return alert('Hanya Admin yang bisa menginput susulan!');
+
+    let targetNama = selectedKaryawan;
+    if (!targetNama) {
+        const select = document.getElementById('selectKaryawanAdmin');
+        if (select && select.value) {
+            targetNama = select.value;
+            selectedKaryawan = targetNama;
+        } else {
+            return alert('Pilih nama karyawan terlebih dahulu!');
+        }
+    }
+
+    const tgl = document.getElementById('susulanTanggal').value;
+    const jamM = document.getElementById('susulanJamMasuk').value;
+    const jamP = document.getElementById('susulanJamPulang').value;
+    const st = document.getElementById('susulanStatus').value;
+
+    if (!tgl) return alert('Pilih tanggal susulan!');
+
+    const newAbsen = {
+        rawDate: tgl,
+        jamMasuk: (st !== 'Tidak Masuk') ? (jamM || '08:00') : '',
+        jamPulang: (st !== 'Tidak Masuk') ? (jamP || '16:00') : '',
+        status: (st === 'Tidak Masuk') ? 'Tidak Masuk' : 'Hadir',
+        lembur: (st === 'Lembur'),
+        catatan: ''
+    };
+
+    refAbsen.child(targetNama).push(newAbsen)
+        .then(() => {
+            alert(`Absen susulan untuk ${targetNama} tanggal ${tgl} disimpan!`);
+            document.getElementById('susulanTanggal').value = '';
+            updateUI();
+        })
+        .catch(err => {
+            alert('Gagal simpan: ' + err.message);
+        });
+}
+
+function hapusAbsenItem(key) {
+    if (confirm('Hapus item absensi ini?')) {
+        const targetNama = (currentRole === 'admin') ? selectedKaryawan : currentUser;
+        refAbsen.child(targetNama).child(key).remove();
+    }
+}
+
+// 7. ACTION KASBON
+function tambahKasbon() {
+    const targetNama = (currentRole === 'admin') ? selectedKaryawan : currentUser;
+    const tglManual = document.getElementById('inputTanggalKasbon').value;
+    const jumlah = parseInt(document.getElementById('inputJumlahKasbon').value);
+    const ket = document.getElementById('inputKetKasbon').value.trim();
+
+    if (!jumlah || jumlah <= 0) return alert('Masukkan nominal kasbon yang valid!');
+
+    const skrg = new Date();
+    const rawDate = tglManual || skrg.toISOString().slice(0, 10);
+    
+    const parts = rawDate.split('-');
+    let tanggalStr = rawDate;
+    if (parts.length === 3) {
+        const d = new Date(parts[0], parts[1] - 1, parts[2]);
+        tanggalStr = d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+    }
+
+    refKasbon.child(targetNama).push({
+        rawDate: rawDate,
+        tanggal: tanggalStr,
+        jumlah: jumlah,
+        keterangan: ket || 'Kasbon'
+    }).then(() => {
+        document.getElementById('inputTanggalKasbon').value = '';
+        document.getElementById('inputJumlahKasbon').value = '';
+        document.getElementById('inputKetKasbon').value = '';
+        alert(`Kasbon Rp ${jumlah.toLocaleString('id-ID')} tanggal ${tanggalStr} berhasil disimpan!`);
+        updateUI();
+    }).catch(err => {
+        alert('Gagal menyimpan kasbon: ' + err.message);
+    });
+}
+
+function hapusKasbonItem(key) {
+    if (confirm('Hapus item kasbon ini?')) {
+        const targetNama = (currentRole === 'admin') ? selectedKaryawan : currentUser;
+        refKasbon.child(targetNama).child(key).remove();
+    }
+}
+
+// 8. MODAL ACTIONS
+let bsModalGaji, bsModalAkun;
+
+function bukaModalGaji() {
+    if (currentRole !== 'admin') return;
+    const cfg = getSettingGaji(selectedKaryawan);
+    document.getElementById('modalNamaKaryawan').innerText = selectedKaryawan;
+    document.getElementById('setTipeGaji').value = cfg.tipe || 'Harian';
+    document.getElementById('setNominalGaji').value = cfg.nominal || 50000;
+    document.getElementById('setTarifLembur').value = cfg.lembur || 50000;
+    document.getElementById('setPotonganAbsen').value = cfg.potongan || 50000;
+    document.getElementById('setTanggalSiklus').value = cfg.siklusTanggal || 19;
+
+    toggleFormGaji();
+    bsModalGaji = new bootstrap.Modal(document.getElementById('modalGaji'));
+    bsModalGaji.show();
+}
+
+function toggleFormGaji() {
+    let tipe = document.getElementById('setTipeGaji').value;
+    document.getElementById('lblNominalGaji').innerText = (tipe === 'Bulanan') ? 'Gaji Pokok Bulanan (Rp)' : 'Nominal Gaji Harian (Rp)';
+}
+
+function simpanSettingGaji() {
+    if (currentRole !== 'admin') return;
+    const dataConfig = {
+        tipe: document.getElementById('setTipeGaji').value,
+        nominal: parseInt(document.getElementById('setNominalGaji').value) || 0,
+        lembur: parseInt(document.getElementById('setTarifLembur').value) || 0,
+        potongan: parseInt(document.getElementById('setPotonganAbsen').value) || 0,
+        siklusTanggal: parseInt(document.getElementById('setTanggalSiklus').value) || 19
+    };
+
+    refGaji.child(selectedKaryawan).set(dataConfig);
+    bsModalGaji.hide();
+    alert(`Setting Gaji & Cut-off Tanggal ${dataConfig.siklusTanggal} untuk ${selectedKaryawan} Tersimpan!`);
+}
+
+function bukaModalAkun() {
+    if (currentRole !== 'admin') return;
+    renderTabelUserModal();
+    bsModalAkun = new bootstrap.Modal(document.getElementById('modalAkun'));
+    bsModalAkun.show();
+}
+
+function renderTabelUserModal() {
+    const tbody = document.getElementById('tabelListUser');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    Object.keys(localUsers).forEach(key => {
+        const u = localUsers[key];
+        tbody.innerHTML += `
+            <tr>
+                <td>${u.nama}</td>
+                <td><span class="badge ${u.role === 'admin' ? 'bg-danger' : 'bg-primary'}">${u.role}</span></td>
+                <td>
+                    <input type="password" value="${u.pin}" class="form-control form-control-sm text-center fw-bold" style="width:70px;" onchange="updatePinUser('${key}', this.value)">
+                </td>
+                <td class="text-center">
+                    ${u.role !== 'admin' ? `<button onclick="hapusUser('${key}')" class="btn btn-xs btn-outline-danger"><i class="fa-solid fa-trash"></i></button>` : '-'}
+                </td>
+            </tr>
+        `;
+    });
+}
+
+function tambahUserBaru() {
+    const nama = document.getElementById('inputNamaUserBaru').value.trim();
+    const pin = document.getElementById('inputPinUserBaru').value.trim();
+    if (!nama || !pin) return alert('Lengkapi Nama dan PIN!');
+
+    const key = nama.toLowerCase().replace(/\s+/g, '_');
+    refUsers.child(key).set({
+        nama: nama,
+        pin: pin,
+        role: 'karyawan'
+    });
+
+    document.getElementById('inputNamaUserBaru').value = '';
+    document.getElementById('inputPinUserBaru').value = '';
+    alert('Karyawan Berhasil Ditambahkan!');
+}
+
+function updatePinUser(key, pinBaru) {
+    if (pinBaru.length >= 4) {
+        refUsers.child(key).update({ pin: pinBaru });
+        alert('PIN Diperbarui!');
+    }
+}
+
+function hapusUser(key) {
+    if (confirm('Hapus user karyawan ini?')) {
+        refUsers.child(key).remove();
+    }
+}
+
+// 9. CETAK SLIP GAJI PDF PERIODE TERPILIH (PRO-RATA MATCHING)
+function cetakPDF() {
+    const targetNama = (currentRole === 'admin') ? selectedKaryawan : currentUser;
+    const cfg = getSettingGaji(targetNama);
+    const cutoffDay = parseInt(cfg.siklusTanggal) || 19;
+
+    const { startPeriod, endPeriod } = getRentangPeriode(cutoffDay, selectedPeriodeOffset);
+
+    const rawAbsenData = localAbsen[targetNama] || {};
+    const rawKasbonData = localKasbon[targetNama] || {};
+
+    const strStart = startPeriod.toISOString().slice(0, 10);
+    const strEnd = endPeriod.toISOString().slice(0, 10);
+
+    let listAbsen = [];
+    Object.keys(rawAbsenData).forEach(k => {
+        let item = rawAbsenData[k];
+        let strTgl = (item.rawDate || '').slice(0, 10);
+        if (strTgl >= strStart && strTgl <= strEnd) listAbsen.push(item);
+    });
+
+    let listKasbon = [];
+    Object.keys(rawKasbonData).forEach(k => {
+        let item = rawKasbonData[k];
+        let strTgl = (item.rawDate || item.tanggal || '').slice(0, 10);
+        if (strTgl >= strStart && strTgl <= strEnd) listKasbon.push(item);
+    });
+
+    let totalHadir = listAbsen.filter(x => x.status === 'Hadir' || x.status === 'Lembur').length;
+    let totalAbsen = listAbsen.filter(x => x.status === 'Tidak Masuk').length;
+    let totalLemburCount = listAbsen.filter(x => x.lembur === true).length;
+
+    let totalHariSiklusBerjalan = totalHadir + totalAbsen;
+    let tarifPerHari = (cfg.tipe === 'Bulanan') ? (cfg.nominal > 0 ? cfg.nominal / 30 : 40000) : cfg.nominal;
+
+    let totalPotonganKurangJam = 0;
+    let nominalGajiPokok = 0;
+
+    if (cfg.tipe === 'Bulanan') {
+        nominalGajiPokok = totalHariSiklusBerjalan * tarifPerHari;
+    } else {
+        nominalGajiPokok = totalHadir * cfg.nominal;
+    }
+
+    listAbsen.forEach(item => {
+        if (item.jamMasuk && item.jamPulang && item.status !== 'Tidak Masuk') {
+            let [h1, m1] = item.jamMasuk.split(':').map(Number);
+            let [h2, m2] = item.jamPulang.split(':').map(Number);
+            let durasiJam = (h2 + m2/60) - (h1 + m1/60);
+            if (durasiJam > 0 && durasiJam < 8) {
+                totalPotonganKurangJam += ((8 - durasiJam) * (tarifPerHari / 8));
+            }
+        }
+    });
+
+    let totalLemburRp = totalLemburCount * cfg.lembur;
+    let totalKotor = nominalGajiPokok + totalLemburRp;
+
+    let tarifDendaPotongan = (cfg.potongan > 0) ? cfg.potongan : tarifPerHari;
+    let totalPotonganAbsen = totalAbsen * tarifDendaPotongan;
+
+    let totalKasbonRp = listKasbon.reduce((acc, curr) => acc + (parseInt(curr.jumlah) || 0), 0);
+    let totalPotongan = totalPotonganAbsen + totalKasbonRp + totalPotonganKurangJam;
+
+    let gajiBersih = totalKotor - totalPotongan;
+
+    const now = new Date();
+    document.getElementById('printNamaSimple').innerText = targetNama;
+    document.getElementById('printNamaTtd').innerText = targetNama;
+    document.getElementById('printTanggalCetak').innerText = now.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+    document.getElementById('printPeriodeGaji').innerText = `${startPeriod.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })} s/d ${endPeriod.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+
+    if (cfg.tipe === 'Bulanan') {
+        document.getElementById('printGajiPokokRow').innerText = `Gaji Bulanan (${totalHariSiklusBerjalan} Hari Berjalan):`;
+    } else {
+        document.getElementById('printGajiPokokRow').innerText = `Gaji Pokok (${totalHadir} Hari x Rp ${(cfg.nominal).toLocaleString('id-ID')}):`;
+    }
+    document.getElementById('printGajiPokokVal').innerText = `Rp ${Math.round(nominalGajiPokok).toLocaleString('id-ID')}`;
+
+    document.getElementById('printLemburRow').innerText = `Uang Lembur (${totalLemburCount} Hari x Rp ${(cfg.lembur).toLocaleString('id-ID')}):`;
+    document.getElementById('printLemburVal').innerText = `Rp ${totalLemburRp.toLocaleString('id-ID')}`;
+
+    document.getElementById('printTotalKotorSimple').innerText = `Rp ${Math.round(totalKotor).toLocaleString('id-ID')}`;
+
+    document.getElementById('printPotonganAbsenRow').innerText = `• Absen Tidak Masuk (${totalAbsen} Hari):`;
+    document.getElementById('printPotonganAbsenVal').innerText = `Rp ${Math.round(totalPotonganAbsen).toLocaleString('id-ID')}`;
+
+    document.getElementById('printPotonganJamRow').innerText = `• Potongan Jam Kerja (<8 Jam):`;
+    document.getElementById('printPotonganJamVal').innerText = `Rp ${Math.round(totalPotonganKurangJam).toLocaleString('id-ID')}`;
+
+    document.getElementById('printKasbonRow').innerText = `• Total Kasbon:`;
+    document.getElementById('printKasbonVal').innerText = `Rp ${totalKasbonRp.toLocaleString('id-ID')}`;
+
+    document.getElementById('printTotalPotonganSimple').innerText = `Rp ${Math.round(totalPotongan).toLocaleString('id-ID')}`;
+    document.getElementById('printGajiBersihSimple').innerText = `Rp ${Math.round(gajiBersih).toLocaleString('id-ID')}`;
+
+    window.print();
+}
